@@ -1,36 +1,64 @@
 -- Reviews Analytics — Supabase Schema
--- Run this in your Supabase SQL editor
+-- Single source of truth. Run this in your Supabase SQL editor.
+-- Product: read-only sentiment intelligence for multi-location restaurant groups.
+-- NOTHING in this schema posts, replies, or drafts on behalf of the tenant.
 
--- Enable UUID extension
+-- ── Extensions ────────────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
+create extension if not exists "pg_cron";        -- scheduled jobs (purge, rollup, digest)
+create extension if not exists "pgcrypto";       -- for encrypting OAuth tokens at rest
 
--- ── Users (extends Supabase auth.users) ──────────────────────────
+-- ─────────────────────────────────────────────────────────────────
+-- AUTH & TENANCY
+-- Every customer-data table carries tenant_id.
+-- RLS is enforced via a Postgres session variable (app.current_tenant_id),
+-- NOT from request params. Never bypass with service-role outside admin routes.
+-- ─────────────────────────────────────────────────────────────────
+
 create table public.profiles (
   id            uuid references auth.users on delete cascade primary key,
+  tenant_id     uuid not null default uuid_generate_v4(), -- org-level key for RLS
   email         text not null,
   full_name     text,
   avatar_url    text,
-  plan          text not null default 'trial', -- trial | standard | enterprise
+  role          text not null default 'tenant' check (role in ('operator','tenant')),
+  plan          text not null default 'trial',  -- trial | standard | enterprise
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
 
--- ── Google OAuth tokens (per user) ───────────────────────────────
+-- Helper: set session-level tenant for RLS
+create or replace function public.set_tenant(p_tenant_id uuid)
+returns void language plpgsql security definer as $$
+begin
+  perform set_config('app.current_tenant_id', p_tenant_id::text, true);
+end;
+$$;
+
+-- ── Google OAuth tokens — encrypted at rest ────────────────────────
+-- access_token and refresh_token are stored encrypted (pgcrypto).
+-- The encryption key comes from the app env, never the DB.
+-- NEVER log or return these raw.
 create table public.google_tokens (
-  id            uuid primary key default uuid_generate_v4(),
-  user_id       uuid references public.profiles(id) on delete cascade not null,
-  access_token  text not null,
-  refresh_token text not null,
-  expires_at    bigint not null,
-  scope         text not null,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now(),
+  id                uuid primary key default uuid_generate_v4(),
+  tenant_id         uuid not null,
+  user_id           uuid references public.profiles(id) on delete cascade not null,
+  access_token_enc  bytea not null,   -- AES-256 encrypted
+  refresh_token_enc bytea not null,   -- AES-256 encrypted
+  expires_at        bigint not null,
+  scope             text not null,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
   unique(user_id)
 );
 
--- ── Locations ─────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────
+-- LOCATIONS
+-- ─────────────────────────────────────────────────────────────────
+
 create table public.locations (
   id                   uuid primary key default uuid_generate_v4(),
+  tenant_id            uuid not null,
   user_id              uuid references public.profiles(id) on delete cascade not null,
   google_account_id    text not null,
   google_location_id   text not null,
@@ -38,82 +66,193 @@ create table public.locations (
   address              text,
   rating               numeric(3,2),
   review_count         int default 0,
+  connection_broken    boolean not null default false,  -- flag when OAuth refresh fails
+  connection_broken_at timestamptz,
   last_synced_at       timestamptz,
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
-  unique(user_id, google_location_id)
+  unique(tenant_id, google_location_id)
 );
 
--- ── Reviews ───────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────
+-- REVIEWS (canonical ingest — 30-day text purge rule)
+--
+-- Verbatim review_text and reviewer_name may only be cached 30 days
+-- (Google API ToS). Derived data (category, score, star_rating, date)
+-- is retained indefinitely — this powers trend charts and rankings.
+-- content_purge_at is set to ingested_at + 30 days.
+-- pg_cron nulls review_text / reviewer_name at the boundary.
+-- ─────────────────────────────────────────────────────────────────
+
 create table public.reviews (
   id                  uuid primary key default uuid_generate_v4(),
+  tenant_id           uuid not null,
   location_id         uuid references public.locations(id) on delete cascade not null,
-  google_review_id    text not null unique,
-  author_name         text,
-  rating              int not null check (rating between 1 and 5),
-  text                text,
-  published_at        timestamptz not null,
-  sentiment_score     numeric(4,3), -- -1.000 to 1.000
-  created_at          timestamptz not null default now()
+  external_review_id  text not null,          -- Google review id
+  source              text not null default 'google',
+  star_rating         int not null check (star_rating between 1 and 5),
+  review_text         text,                   -- nulled at content_purge_at
+  reviewer_name       text,                   -- nulled at content_purge_at
+  reviewed_at         timestamptz not null,   -- when the guest wrote the review
+  ingested_at         timestamptz not null default now(),
+  content_purge_at    timestamptz not null generated always as (ingested_at + interval '30 days') stored,
+  status              text not null default 'ingested',
+  unique(tenant_id, external_review_id)
 );
 
--- ── Review categories (sentiment per category) ────────────────────
-create table public.review_categories (
+-- ─────────────────────────────────────────────────────────────────
+-- REVIEW ANALYSES (per-review AI output)
+--
+-- Fixed taxonomy — do NOT let the model invent categories.
+-- Categories: food | service | atmosphere | value | wait_time | cleanliness
+-- A single review can hit multiple categories.
+-- All reviews are categorized regardless of star rating
+-- (5★ reviews power "what they love" — positive sentiment matters too).
+-- danger_flags are surfaced in the dashboard regardless of category.
+-- ─────────────────────────────────────────────────────────────────
+
+create table public.review_analyses (
   id          uuid primary key default uuid_generate_v4(),
+  tenant_id   uuid not null,
   review_id   uuid references public.reviews(id) on delete cascade not null,
-  category    text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
-  sentiment   text not null check (sentiment in ('positive','neutral','negative')),
-  score       numeric(4,3),
-  excerpt     text
+  model_used  text not null default 'claude',
+  -- danger flags — highlighted in UI even with no publish path
+  flag_health_safety    boolean not null default false,
+  flag_legal            boolean not null default false,
+  flag_discrimination   boolean not null default false,
+  flag_physical_safety  boolean not null default false,
+  needs_attention       boolean not null generated always as (
+    flag_health_safety or flag_legal or flag_discrimination or flag_physical_safety
+  ) stored,
+  analyzed_at  timestamptz not null default now(),
+  unique(review_id)
 );
 
--- ── Drift alerts ──────────────────────────────────────────────────
+-- Per-category sentiment scores for each review
+create table public.review_categories (
+  id              uuid primary key default uuid_generate_v4(),
+  tenant_id       uuid not null,
+  analysis_id     uuid references public.review_analyses(id) on delete cascade not null,
+  review_id       uuid references public.reviews(id) on delete cascade not null,
+  category        text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
+  sentiment_score numeric(4,3) not null,  -- -1.000 to 1.000
+  confidence      numeric(4,3) not null,  -- 0.000 to 1.000
+  sentiment       text not null generated always as (
+    case
+      when sentiment_score > 0.1  then 'positive'
+      when sentiment_score < -0.1 then 'negative'
+      else 'neutral'
+    end
+  ) stored
+);
+
+-- ─────────────────────────────────────────────────────────────────
+-- CATEGORY ROLLUPS (pre-aggregated — never live-join raw reviews)
+--
+-- Computed by pg_cron job (every 6h + after every reconciliation poll).
+-- Dashboard + digest both read from this table, not from raw reviews.
+-- window_end is always the end of the most recent complete day.
+-- ─────────────────────────────────────────────────────────────────
+
+create table public.category_rollups (
+  id                  uuid primary key default uuid_generate_v4(),
+  tenant_id           uuid not null,
+  location_id         uuid references public.locations(id) on delete cascade not null,
+  category            text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
+  window_days         int not null,          -- 7, 30, 90
+  window_end          date not null,
+  mention_count       int not null default 0,
+  positive_count      int not null default 0,
+  negative_count      int not null default 0,
+  neutral_count       int not null default 0,
+  avg_sentiment_score numeric(4,3),
+  -- week-over-week signed delta (set by the rollup job)
+  sentiment_delta     numeric(4,3),          -- current_avg - prior_period_avg
+  computed_at         timestamptz not null default now(),
+  unique(tenant_id, location_id, category, window_days, window_end)
+);
+
+-- ─────────────────────────────────────────────────────────────────
+-- DRIFT ALERTS
+--
+-- A drift alert fires when a category's sentiment_delta crosses the
+-- agreed threshold (defined in the rollup job, not here).
+-- Threshold decision: delta < -0.2 over the 30-day window triggers 'medium';
+-- delta < -0.4 triggers 'high'. These are the paper-agreed numbers —
+-- adjust only after design-partner feedback, not by feel.
+-- ─────────────────────────────────────────────────────────────────
+
 create table public.drift_alerts (
   id           uuid primary key default uuid_generate_v4(),
+  tenant_id    uuid not null,
   location_id  uuid references public.locations(id) on delete cascade not null,
-  category     text not null,
+  category     text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
   severity     text not null check (severity in ('low','medium','high')),
+  -- The before/after deltas must be stored — they power the proof-of-impact view
+  score_before numeric(4,3) not null,
+  score_after  numeric(4,3) not null,
+  delta        numeric(4,3) not null generated always as (score_after - score_before) stored,
   message      text not null,
   detected_at  timestamptz not null default now(),
   resolved     boolean not null default false,
-  resolved_at  timestamptz
+  resolved_at  timestamptz,
+  -- Proof-of-impact: when a flagged category recovers, surface this explicitly
+  recovery_score numeric(4,3),
+  recovered_at   timestamptz
 );
 
--- ── Row Level Security ────────────────────────────────────────────
-alter table public.profiles        enable row level security;
-alter table public.google_tokens   enable row level security;
-alter table public.locations       enable row level security;
-alter table public.reviews         enable row level security;
+-- ─────────────────────────────────────────────────────────────────
+-- WEEKLY DIGEST LOG
+-- ─────────────────────────────────────────────────────────────────
+
+create table public.digest_log (
+  id          uuid primary key default uuid_generate_v4(),
+  tenant_id   uuid not null,
+  sent_at     timestamptz not null default now(),
+  email_to    text not null,
+  status      text not null check (status in ('sent','failed')),
+  error_msg   text
+);
+
+-- ─────────────────────────────────────────────────────────────────
+-- ROW LEVEL SECURITY
+-- ─────────────────────────────────────────────────────────────────
+
+alter table public.profiles          enable row level security;
+alter table public.google_tokens     enable row level security;
+alter table public.locations         enable row level security;
+alter table public.reviews           enable row level security;
+alter table public.review_analyses   enable row level security;
 alter table public.review_categories enable row level security;
-alter table public.drift_alerts    enable row level security;
+alter table public.category_rollups  enable row level security;
+alter table public.drift_alerts      enable row level security;
+alter table public.digest_log        enable row level security;
 
--- Profiles: own row only
-create policy "users can read own profile"  on public.profiles for select using (auth.uid() = id);
-create policy "users can update own profile" on public.profiles for update using (auth.uid() = id);
+-- RLS helper: current tenant from session variable (set by app, never from request params)
+create or replace function public.current_tenant_id()
+returns uuid language sql stable as $$
+  select nullif(current_setting('app.current_tenant_id', true), '')::uuid;
+$$;
 
--- Google tokens: own row only
-create policy "users can manage own tokens" on public.google_tokens for all using (auth.uid() = user_id);
+-- Profiles: own row
+create policy "own profile" on public.profiles for all
+  using (auth.uid() = id);
 
--- Locations: own locations only
-create policy "users can manage own locations" on public.locations for all using (auth.uid() = user_id);
+-- All tenant-scoped tables use the same pattern: tenant_id = session variable
+create policy "tenant isolation" on public.google_tokens     for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.locations         for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.reviews           for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.review_analyses   for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.review_categories for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.category_rollups  for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.drift_alerts      for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.digest_log        for all using (tenant_id = public.current_tenant_id());
 
--- Reviews: via location ownership
-create policy "users can read own reviews" on public.reviews for select
-  using (exists (select 1 from public.locations l where l.id = reviews.location_id and l.user_id = auth.uid()));
+-- ─────────────────────────────────────────────────────────────────
+-- TRIGGERS & AUTO-JOBS
+-- ─────────────────────────────────────────────────────────────────
 
--- Review categories: via review → location ownership
-create policy "users can read own review categories" on public.review_categories for select
-  using (exists (
-    select 1 from public.reviews r
-    join public.locations l on l.id = r.location_id
-    where r.id = review_categories.review_id and l.user_id = auth.uid()
-  ));
-
--- Drift alerts: via location ownership
-create policy "users can read own drift alerts" on public.drift_alerts for select
-  using (exists (select 1 from public.locations l where l.id = drift_alerts.location_id and l.user_id = auth.uid()));
-
--- ── Trigger: create profile on signup ────────────────────────────
+-- Auto-create profile on signup
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -131,3 +270,46 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- 30-day text purge job (runs daily at 03:00 UTC)
+-- Nulls review_text and reviewer_name when content_purge_at is past.
+-- Derived data (category scores, star_rating, dates) is NEVER deleted.
+select cron.schedule(
+  'purge-review-text',
+  '0 3 * * *',
+  $$
+    update public.reviews
+    set review_text = null, reviewer_name = null
+    where content_purge_at <= now()
+      and (review_text is not null or reviewer_name is not null);
+  $$
+);
+
+-- Weekly Monday digest trigger (7:00 UTC — no per-tenant timezone in v1)
+-- The actual digest computation + Resend send is handled by the app's
+-- API route (POST /api/digest/send) called by this cron job.
+select cron.schedule(
+  'weekly-digest',
+  '0 7 * * 1',
+  $$
+    select net.http_post(
+      url := current_setting('app.base_url') || '/api/digest/send',
+      headers := '{"Content-Type":"application/json","x-cron-secret":"' || current_setting('app.cron_secret') || '"}'::jsonb,
+      body := '{}'::jsonb
+    );
+  $$
+);
+
+-- Reconciliation poll (every 6h — pairs with Pub/Sub push)
+-- Ensures missed Pub/Sub events don't silently undercount category mentions.
+select cron.schedule(
+  'review-reconciliation-poll',
+  '0 */6 * * *',
+  $$
+    select net.http_post(
+      url := current_setting('app.base_url') || '/api/reviews/sync',
+      headers := '{"Content-Type":"application/json","x-cron-secret":"' || current_setting('app.cron_secret') || '"}'::jsonb,
+      body := '{"trigger":"scheduled_poll"}'::jsonb
+    );
+  $$
+);
