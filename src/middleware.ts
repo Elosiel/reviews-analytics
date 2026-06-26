@@ -31,12 +31,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Redirect unauthenticated users to login
-  if (!user && pathname.startsWith("/dashboard")) {
+  // Unauthenticated: protect dashboard and onboarding
+  if (!user && (pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding"))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Redirect authenticated users away from login
+  // Authenticated: redirect away from login
   if (user && pathname === "/login") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -45,5 +45,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/onboarding", "/login"],
 };

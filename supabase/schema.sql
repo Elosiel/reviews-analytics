@@ -95,10 +95,24 @@ create table public.reviews (
   reviewer_name       text,                   -- nulled at content_purge_at
   reviewed_at         timestamptz not null,   -- when the guest wrote the review
   ingested_at         timestamptz not null default now(),
-  content_purge_at    timestamptz not null generated always as (ingested_at + interval '30 days') stored,
+  content_purge_at    timestamptz not null,  -- set by trigger: ingested_at + 30 days
   status              text not null default 'ingested',
   unique(tenant_id, external_review_id)
 );
+
+-- Trigger: auto-set content_purge_at = ingested_at + 30 days on insert
+-- (Can't use a generated column — timestamptz + interval is STABLE not IMMUTABLE in PG)
+create or replace function public.set_content_purge_at()
+returns trigger language plpgsql as $$
+begin
+  new.content_purge_at := new.ingested_at + interval '30 days';
+  return new;
+end;
+$$;
+
+create trigger set_review_purge_at
+  before insert on public.reviews
+  for each row execute procedure public.set_content_purge_at();
 
 -- ─────────────────────────────────────────────────────────────────
 -- REVIEW ANALYSES (per-review AI output)
