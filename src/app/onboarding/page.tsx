@@ -163,8 +163,8 @@ function OnboardingInner() {
                   Connect your Google Business Profile
                 </h1>
                 <p className="text-zinc-500">
-                  We need read-only access to your Google reviews to build your
-                  ranked report. We never post anything on your behalf.
+                  We need access to your Google reviews to build your ranked
+                  report. Your listing and reviews stay exactly as they are.
                 </p>
               </div>
 
@@ -199,8 +199,8 @@ function OnboardingInner() {
                 </ul>
                 <div className="pt-2 border-t border-zinc-100">
                   <p className="text-xs text-zinc-400">
-                    Read-only access only. We never post, reply, or modify
-                    anything on Google on your behalf.
+                    Secure access — your Google listing and reviews stay
+                    exactly as they are.
                   </p>
                 </div>
               </div>
