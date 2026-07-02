@@ -176,19 +176,26 @@ export default function RankedIssueCard({
           </div>
         )}
 
-        {/* Collapsed: recommendation is always one click away, never hidden */}
+        {/* Collapsed: recommendation preview with expand chevron */}
         {!expanded && issue.recommendation && (
           <button
             onClick={() => setExpanded(true)}
-            className="mt-3 ml-12 flex items-center gap-2 text-left group max-w-full"
+            className="mt-3 ml-12 w-[calc(100%-3rem)] text-left group"
           >
-            <Sparkles className="w-3.5 h-3.5 text-forest shrink-0" />
-            <span className="text-xs text-ink-soft truncate group-hover:text-ink transition-colors">
-              <span className="font-semibold text-forest">
-                Our recommendation:
-              </span>{" "}
-              {issue.recommendation}
-            </span>
+            <div className="rounded-xl bg-[#f0f4ee] border border-forest/15 p-4 hover:border-forest/25 transition-colors">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="w-3.5 h-3.5 text-forest shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-forest uppercase tracking-[0.14em] mb-1">
+                    Our recommendation
+                  </p>
+                  <p className="text-sm text-[#2c3d2f] leading-relaxed line-clamp-2">
+                    {issue.recommendation}
+                  </p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-forest shrink-0 mt-0.5 group-hover:translate-y-0.5 transition-transform" />
+              </div>
+            </div>
           </button>
         )}
       </div>
