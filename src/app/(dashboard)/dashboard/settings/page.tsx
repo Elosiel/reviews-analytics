@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, RefreshCw, Plus, Sparkles } from "lucide-react";
-import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -39,24 +38,25 @@ export default async function SettingsPage() {
         </h1>
       </div>
 
-      {/* Restaurant profile — feeds the AI recommendations */}
-      <div className="bg-paper rounded-2xl border border-line">
-        <div className="px-6 py-5 border-b border-line-soft">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-forest" />
-            <h2 className="font-heading text-lg font-semibold text-ink">
-              Restaurant profile
-            </h2>
-          </div>
-          <p className="text-xs text-ink-soft mt-1">
-            This is how the AI knows who you are. Every recommendation on your
-            dashboard is written against these answers — keep them current.
-          </p>
+      {/* Restaurant context now lives on its own page */}
+      <a
+        href="/dashboard/restaurant"
+        className="block bg-paper rounded-2xl border border-line px-6 py-5 hover:border-forest/40 transition-colors group"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-forest" />
+          <h2 className="font-heading text-lg font-semibold text-ink">
+            Your restaurant
+          </h2>
+          <span className="ml-auto text-xs font-medium text-forest opacity-0 group-hover:opacity-100 transition-opacity">
+            Open →
+          </span>
         </div>
-        <div className="px-6 py-5">
-          <RestaurantProfileForm />
-        </div>
-      </div>
+        <p className="text-xs text-ink-soft mt-1">
+          Profile, website, menus, and documents — everything the AI knows
+          about you moved to its own page.
+        </p>
+      </a>
 
       {/* Account */}
       <div className="bg-paper rounded-2xl border border-line divide-y divide-line-soft">
