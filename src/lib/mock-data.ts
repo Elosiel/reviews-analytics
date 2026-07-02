@@ -1,11 +1,15 @@
 /**
- * Mock data for UI development — used when Supabase is not yet connected.
- * Replace these with real DB queries once credentials are in .env.local.
+ * Demo data for UI development and sales demos — used until real locations
+ * are connected. Everything here is DETERMINISTIC (no Math.random, no
+ * new Date() in values that render) so server and client markup match.
+ *
+ * The story: a 3-location Miami group. Coral Gables is the star,
+ * Wynwood is the weak link (service collapsing), Downtown has a wait-time
+ * problem but just recovered its food scores — the proof-of-impact story.
  */
 
 import type {
   RankedIssue,
-  CategoryRollup,
   DriftAlert,
   Location,
   SentimentCategory,
@@ -24,9 +28,9 @@ export const MOCK_LOCATIONS: Location[] = [
     review_count: 312,
     connection_broken: false,
     connection_broken_at: null,
-    last_synced_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    last_synced_at: "2026-07-02T06:00:00Z",
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-07-02T06:00:00Z",
   },
   {
     id: "loc-2",
@@ -40,9 +44,9 @@ export const MOCK_LOCATIONS: Location[] = [
     review_count: 187,
     connection_broken: false,
     connection_broken_at: null,
-    last_synced_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    last_synced_at: "2026-07-02T06:00:00Z",
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-07-02T06:00:00Z",
   },
   {
     id: "loc-3",
@@ -56,11 +60,48 @@ export const MOCK_LOCATIONS: Location[] = [
     review_count: 428,
     connection_broken: false,
     connection_broken_at: null,
-    last_synced_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    last_synced_at: "2026-07-02T06:00:00Z",
+    created_at: "2026-01-10T00:00:00Z",
+    updated_at: "2026-07-02T06:00:00Z",
   },
 ];
+
+// ── Cross-location matrix: 90-day rollup per location × category ──
+export interface MatrixCell {
+  score: number;
+  delta: number;
+  mentions: number;
+}
+
+export const MOCK_MATRIX: Record<
+  string,
+  Record<SentimentCategory, MatrixCell>
+> = {
+  "loc-1": {
+    food: { score: 0.42, delta: 0.35, mentions: 86 }, // recovered — see MOCK_RECOVERY
+    service: { score: 0.18, delta: -0.06, mentions: 74 },
+    atmosphere: { score: 0.55, delta: 0.02, mentions: 61 },
+    value: { score: 0.62, delta: 0.05, mentions: 31 },
+    wait_time: { score: -0.58, delta: -0.22, mentions: 28 },
+    cleanliness: { score: -0.35, delta: -0.08, mentions: 9 },
+  },
+  "loc-2": {
+    food: { score: -0.44, delta: -0.18, mentions: 21 },
+    service: { score: -0.72, delta: -0.31, mentions: 34 },
+    atmosphere: { score: 0.38, delta: 0.01, mentions: 26 },
+    value: { score: 0.12, delta: -0.04, mentions: 18 },
+    wait_time: { score: -0.21, delta: -0.11, mentions: 15 },
+    cleanliness: { score: 0.05, delta: 0.0, mentions: 11 },
+  },
+  "loc-3": {
+    food: { score: 0.74, delta: 0.09, mentions: 52 },
+    service: { score: 0.51, delta: 0.04, mentions: 47 },
+    atmosphere: { score: 0.81, delta: 0.12, mentions: 67 },
+    value: { score: 0.28, delta: -0.02, mentions: 22 },
+    wait_time: { score: 0.1, delta: 0.03, mentions: 12 },
+    cleanliness: { score: 0.44, delta: 0.06, mentions: 17 },
+  },
+};
 
 export const MOCK_RANKED_ISSUES: RankedIssue[] = [
   {
@@ -74,7 +115,7 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
     quotes: [
       "Server forgot our order twice and never apologized.",
       "Waited 20 minutes before anyone acknowledged us.",
-      "Staff seemed overwhelmed and unattentive all night.",
+      "Staff seemed overwhelmed and inattentive all night.",
     ],
   },
   {
@@ -165,8 +206,8 @@ export const MOCK_DRIFT_ALERTS: DriftAlert[] = [
     score_after: -0.72,
     delta: -0.31,
     message:
-      "Service sentiment at Wynwood has dropped sharply over the past 30 days. Now in 61% 1–2★ territory.",
-    detected_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      "Service sentiment at Wynwood has dropped sharply over the past 30 days.",
+    detected_at: "2026-06-30T08:00:00Z",
     resolved: false,
     resolved_at: null,
     recovery_score: null,
@@ -182,8 +223,8 @@ export const MOCK_DRIFT_ALERTS: DriftAlert[] = [
     score_after: -0.58,
     delta: -0.22,
     message:
-      "Wait time complaints at Downtown Miami have increased 22 points in the last 30 days.",
-    detected_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      "Wait time complaints at Downtown Miami have increased over the last 30 days.",
+    detected_at: "2026-06-27T08:00:00Z",
     resolved: false,
     resolved_at: null,
     recovery_score: null,
@@ -191,43 +232,84 @@ export const MOCK_DRIFT_ALERTS: DriftAlert[] = [
   },
 ];
 
-// 90-day trend data per category for charts
-export function mockTrendData(category: SentimentCategory) {
-  const points = 12; // 12 weeks
-  const base: Record<SentimentCategory, number> = {
-    food: 0.4,
-    service: -0.2,
-    atmosphere: 0.7,
-    value: 0.3,
-    wait_time: -0.4,
-    cleanliness: 0.1,
-  };
-  return Array.from({ length: points }, (_, i) => {
-    const week = new Date();
-    week.setDate(week.getDate() - (points - i - 1) * 7);
-    const jitter = (Math.random() - 0.5) * 0.25;
-    const trend = category === "service" || category === "wait_time" ? -0.02 * i : 0.01 * i;
-    return {
-      week: week.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      score: Math.max(-1, Math.min(1, base[category] + jitter + trend)),
-    };
-  });
-}
-
-export const MOCK_ROLLUPS: CategoryRollup[] = (
-  ["food", "service", "atmosphere", "value", "wait_time", "cleanliness"] as SentimentCategory[]
-).map((cat) => ({
-  id: `rollup-${cat}`,
+// ── Proof of impact: a flagged category that recovered ──
+export const MOCK_RECOVERY: DriftAlert = {
+  id: "alert-0",
   tenant_id: "tenant-1",
   location_id: "loc-1",
-  category: cat,
-  window_days: 90,
-  window_end: new Date().toISOString().split("T")[0],
-  mention_count: Math.floor(Math.random() * 80 + 20),
-  positive_count: Math.floor(Math.random() * 40),
-  negative_count: Math.floor(Math.random() * 30),
-  neutral_count: Math.floor(Math.random() * 20),
-  avg_sentiment_score: parseFloat((Math.random() * 1.6 - 0.8).toFixed(3)),
-  sentiment_delta: parseFloat((Math.random() * 0.4 - 0.2).toFixed(3)),
-  computed_at: new Date().toISOString(),
-}));
+  category: "food",
+  severity: "medium",
+  score_before: -0.38,
+  score_after: -0.38,
+  delta: -0.24,
+  message: "Cold-food complaints at Downtown Miami.",
+  detected_at: "2026-05-12T08:00:00Z",
+  resolved: true,
+  resolved_at: "2026-06-23T08:00:00Z",
+  recovery_score: 0.42,
+  recovered_at: "2026-06-23T08:00:00Z",
+};
+
+// ── Danger flag: surfaced regardless of category (spec rule 6) ──
+export interface NeedsAttentionItem {
+  id: string;
+  location_id: string;
+  location_name: string;
+  flag: "health_safety" | "legal" | "discrimination" | "physical_safety";
+  star_rating: number;
+  quote: string;
+  reviewed_at: string;
+}
+
+export const MOCK_NEEDS_ATTENTION: NeedsAttentionItem[] = [
+  {
+    id: "flag-1",
+    location_id: "loc-2",
+    location_name: "Wynwood",
+    flag: "health_safety",
+    star_rating: 1,
+    quote:
+      "Both of us felt sick within hours of eating the shrimp special. Something was off.",
+    reviewed_at: "2026-06-30T21:14:00Z",
+  },
+];
+
+// ── This week, in numbers (powers the header narrative + Monday brief) ──
+export const MOCK_WEEK = {
+  new_reviews: 47,
+  avg_rating: 4.3,
+  rating_delta: 0.1,
+  best: { category: "atmosphere" as SentimentCategory, location: "Coral Gables" },
+  worst: { category: "service" as SentimentCategory, location: "Wynwood" },
+  digest_email: "you@yourrestaurant.com",
+};
+
+// ── 90-day weekly trend per category (deterministic — no randomness) ──
+const TREND_SHAPE: Record<
+  SentimentCategory,
+  { base: number; slope: number; phase: number }
+> = {
+  food: { base: 0.18, slope: 0.021, phase: 0.8 },       // recovering
+  service: { base: 0.05, slope: -0.028, phase: 2.1 },   // declining
+  atmosphere: { base: 0.62, slope: 0.008, phase: 4.2 }, // strong, stable
+  value: { base: 0.3, slope: 0.004, phase: 1.4 },
+  wait_time: { base: -0.22, slope: -0.014, phase: 3.3 },// slipping
+  cleanliness: { base: 0.08, slope: -0.003, phase: 5.0 },
+};
+
+const TREND_WEEKS = [
+  "Apr 6", "Apr 13", "Apr 20", "Apr 27",
+  "May 4", "May 11", "May 18", "May 25",
+  "Jun 1", "Jun 8", "Jun 15", "Jun 22", "Jun 29",
+];
+
+export function mockTrendData(category: SentimentCategory) {
+  const { base, slope, phase } = TREND_SHAPE[category];
+  return TREND_WEEKS.map((week, i) => ({
+    week,
+    score: Math.max(
+      -1,
+      Math.min(1, base + slope * i + 0.09 * Math.sin(i * 1.7 + phase))
+    ),
+  }));
+}

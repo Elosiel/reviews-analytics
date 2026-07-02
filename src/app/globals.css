@@ -9,7 +9,21 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-fraunces);
+
+  /* ── Reviews Analytics brand — warm editorial ── */
+  --color-cream: #f6f3ea;      /* page plane */
+  --color-paper: #fffdf8;      /* card surface */
+  --color-ink: #1d1a14;        /* primary text */
+  --color-ink-soft: #5f594c;   /* secondary text */
+  --color-ink-faint: #97907f;  /* muted text */
+  --color-line: #e9e3d2;       /* hairline borders */
+  --color-line-soft: #f1ecdf;  /* subtle borders */
+  --color-forest: #17402f;     /* brand green — nav, buttons */
+  --color-forest-soft: #1e5540;
+  --color-pos: #0b7d5a;        /* validated diverging pole — positive */
+  --color-neg: #c73527;        /* validated diverging pole — negative */
+  --color-gold: #b98322;       /* star ratings */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,24 +63,24 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #f6f3ea;
+  --foreground: #1d1a14;
+  --card: #fffdf8;
+  --card-foreground: #1d1a14;
+  --popover: #fffdf8;
+  --popover-foreground: #1d1a14;
+  --primary: #17402f;
+  --primary-foreground: #fffdf8;
+  --secondary: #efeadd;
+  --secondary-foreground: #1d1a14;
+  --muted: #efeadd;
+  --muted-foreground: #5f594c;
+  --accent: #efeadd;
+  --accent-foreground: #1d1a14;
+  --destructive: #c73527;
+  --border: #e9e3d2;
+  --input: #e9e3d2;
+  --ring: #17402f;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

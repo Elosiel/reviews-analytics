@@ -3,16 +3,8 @@
 import { useState } from "react";
 import { X, Printer, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { RankedIssue, SentimentCategory } from "@/types";
-
-const CATEGORY_LABELS: Record<SentimentCategory, string> = {
-  food: "Food Quality",
-  service: "Service",
-  atmosphere: "Atmosphere",
-  value: "Value",
-  wait_time: "Wait Time",
-  cleanliness: "Cleanliness",
-};
+import type { RankedIssue } from "@/types";
+import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
 
 interface ShiftMeetingCardProps {
   issue: RankedIssue;
@@ -88,19 +80,21 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+    <div className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4">
+      <div className="bg-paper rounded-2xl shadow-xl w-full max-w-lg border border-line">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-zinc-100">
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-line-soft">
           <div>
-            <p className="text-xs text-zinc-400 mb-0.5">Shift Meeting Brief</p>
-            <h2 className="font-semibold text-zinc-900">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-ink-faint mb-0.5 font-medium">
+              Shift Meeting Brief
+            </p>
+            <h2 className="font-heading text-lg font-semibold text-ink">
               {CATEGORY_LABELS[issue.category]} — {issue.location_name}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-700"
+            className="text-ink-faint hover:text-ink"
           >
             <X className="w-5 h-5" />
           </button>
@@ -109,54 +103,52 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-zinc-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-zinc-500 mb-1">Mentions</p>
-              <p className="text-lg font-bold text-zinc-900">
+            <div className="bg-cream rounded-xl p-3 text-center">
+              <p className="text-xs text-ink-faint mb-1">Mentions</p>
+              <p className="text-lg font-bold text-ink tabular-nums">
                 {issue.mention_count}
               </p>
-              <p className="text-xs text-zinc-400">last 30 days</p>
+              <p className="text-xs text-ink-faint">last 30 days</p>
             </div>
-            <div className="bg-zinc-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-zinc-500 mb-1">Score</p>
+            <div className="bg-cream rounded-xl p-3 text-center">
+              <p className="text-xs text-ink-faint mb-1">Score</p>
               <p
-                className={`text-lg font-bold ${
+                className={`text-lg font-bold tabular-nums ${
                   issue.avg_sentiment_score >= 0.2
-                    ? "text-emerald-600"
-                    : issue.avg_sentiment_score >= -0.1
-                    ? "text-amber-600"
-                    : "text-red-600"
+                    ? "text-pos"
+                    : issue.avg_sentiment_score <= -0.2
+                    ? "text-neg"
+                    : "text-ink-soft"
                 }`}
               >
-                {issue.avg_sentiment_score.toFixed(2)}
+                {fmtScore(issue.avg_sentiment_score)}
               </p>
-              <p className="text-xs text-zinc-400">sentiment</p>
+              <p className="text-xs text-ink-faint">sentiment</p>
             </div>
-            <div className="bg-zinc-50 rounded-lg p-3 text-center">
-              <p className="text-xs text-zinc-500 mb-1">Trend</p>
+            <div className="bg-cream rounded-xl p-3 text-center">
+              <p className="text-xs text-ink-faint mb-1">Trend</p>
               <p
-                className={`text-lg font-bold ${
-                  (issue.sentiment_delta ?? 0) >= 0
-                    ? "text-emerald-600"
-                    : "text-red-600"
+                className={`text-lg font-bold tabular-nums ${
+                  (issue.sentiment_delta ?? 0) >= 0 ? "text-pos" : "text-neg"
                 }`}
               >
                 {issue.sentiment_delta !== null && issue.sentiment_delta !== undefined
-                  ? `${issue.sentiment_delta > 0 ? "+" : ""}${issue.sentiment_delta.toFixed(2)}`
+                  ? fmtScore(issue.sentiment_delta)
                   : "—"}
               </p>
-              <p className="text-xs text-zinc-400">vs prior</p>
+              <p className="text-xs text-ink-faint">vs prior</p>
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-2">
+            <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em] mb-2">
               What guests are saying
             </p>
             <div className="space-y-2">
               {issue.quotes.map((q, i) => (
                 <blockquote
                   key={i}
-                  className="border-l-2 border-zinc-200 pl-3 text-sm text-zinc-600 italic"
+                  className="border-l-2 border-line pl-3 text-sm text-ink-soft italic"
                 >
                   &ldquo;{q}&rdquo;
                 </blockquote>
@@ -164,11 +156,11 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
             </div>
           </div>
 
-          <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3">
-            <p className="text-xs font-medium text-zinc-700">
+          <div className="rounded-xl bg-cream border border-line-soft p-3">
+            <p className="text-xs font-semibold text-ink">
               Action for today&apos;s shift
             </p>
-            <p className="text-sm text-zinc-600 mt-1">
+            <p className="text-sm text-ink-soft mt-1">
               Address{" "}
               <strong>
                 {CATEGORY_LABELS[issue.category].toLowerCase()}
@@ -188,7 +180,7 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
           >
             {copied ? (
               <>
-                <Check className="w-4 h-4 text-emerald-500" /> Copied
+                <Check className="w-4 h-4 text-pos" /> Copied
               </>
             ) : (
               <>
@@ -198,7 +190,7 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
           </Button>
           <Button
             onClick={handlePrint}
-            className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white gap-2"
+            className="flex-1 bg-forest hover:bg-forest-soft text-paper gap-2"
           >
             <Printer className="w-4 h-4" /> Print / PDF
           </Button>
