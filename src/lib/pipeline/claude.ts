@@ -126,7 +126,7 @@ export async function generateRecommendation(
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 300,
-    system: `You are an experienced restaurant operations consultant. Given a review-sentiment issue and the restaurant's profile, write ONE short paragraph (3-4 sentences) of concrete, specific action the owner can take this week. Ground it in the guest quotes. Use the profile — mission, target guests, price point, goals — to judge what matters most. Plain language: guests, tables, shifts, dollars. No preamble, no bullet points, no headers. Never suggest replying to or contacting reviewers — this product is read-only.`,
+    system: `You are an experienced restaurant operations consultant. Given a review-sentiment issue and the restaurant's profile, write ONE short paragraph (3-4 sentences) recommending a concrete, specific action the owner could take this week. Ground it in the guest quotes. Use the profile — mission, target guests, price point, goals — to judge what matters most. Frame it as a supportive recommendation, never an order: prefer "we'd recommend", "consider", "it may be worth" over imperatives — the owner decides, you advise. Plain language: guests, tables, shifts, dollars. No preamble, no bullet points, no headers. Recommend operational changes inside the restaurant only — do not suggest contacting or replying to reviewers.`,
     messages: [
       {
         role: "user",

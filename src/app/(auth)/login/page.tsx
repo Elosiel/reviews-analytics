@@ -111,8 +111,8 @@ function LoginInner() {
         </div>
 
         <p className="text-zinc-600 text-xs">
-          © {new Date().getFullYear()} Reviews Analytics. Read-only access to
-          your Google Business Profile. We never post on your behalf.
+          © {new Date().getFullYear()} Reviews Analytics. Secure access to
+          your Google Business Profile — your reviews stay in your hands.
         </p>
       </div>
 
@@ -239,7 +239,8 @@ function LoginInner() {
               ))}
             </ul>
             <p className="text-xs text-zinc-400 pt-1 border-t border-zinc-100">
-              We never post, reply, or modify anything on your behalf.
+              Your reviews stay exactly as they are — we read them to power
+              your insights.
             </p>
           </div>
 

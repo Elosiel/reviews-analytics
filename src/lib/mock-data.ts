@@ -132,7 +132,7 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "Staff seemed overwhelmed and inattentive all night.",
     ],
     recommendation:
-      "Your core guests are date nights — a slow first greeting kills that experience before the food arrives. Set a 90-second greet standard, add one floor lead on Friday and Saturday, and run the greet drill at Tuesday's pre-shift. If staffing is the constraint, cut two tables from the Friday book until hiring catches up. Expect mentions to fall within two weeks.",
+      "Your core guests are date nights, and a slow first greeting sets the tone before the food ever arrives. We'd suggest trying a 90-second greet standard and adding one floor lead on Friday and Saturday — the greet drill could fit naturally into Tuesday's pre-shift. If staffing is the constraint, temporarily trimming two tables from the Friday book may relieve the pressure. Groups who've made this change usually see mentions ease within two weeks.",
   },
   {
     category: "wait_time",
@@ -147,7 +147,7 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "Food took forever to come out even when the place was half empty.",
     ],
     recommendation:
-      "Complaints cluster on reservations not being honored — that's a table-matrix problem, not a demand problem. Audit Friday's book against actual turn times, stop double-seating the 7–8pm slot, and quote walk-ins honestly. Business dinners are in your profile; they forgive a wait they were told about, never one they weren't.",
+      "Complaints cluster on reservations not being honored — that usually points to the table matrix rather than demand. It may be worth auditing Friday's book against actual turn times and easing off double-seating the 7–8pm slot, while quoting walk-ins honestly. Business dinners are core to your profile, and they tend to forgive a wait they were told about far more than one they weren't.",
   },
   {
     category: "food",
@@ -162,7 +162,7 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "Portion sizes have definitely shrunk since last time.",
     ],
     recommendation:
-      "Cold plates plus 'portions shrunk' usually means food dying in the pass, not the recipe. Check expo coverage on Wynwood's peak nights and whether hot plates are actually being used. Downtown just fixed this exact pattern in six weeks — copy their pass-timing standard before changing the menu.",
+      "Cold plates plus 'portions shrunk' usually suggests food waiting in the pass rather than a recipe problem. We'd recommend looking at expo coverage on Wynwood's peak nights and whether hot plates are actually in use. Downtown worked through this exact pattern in six weeks — their pass-timing standard could be worth borrowing before considering any menu changes.",
   },
   {
     category: "cleanliness",
@@ -174,7 +174,7 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
     severity: "low",
     quotes: ["Bathroom needed attention during peak hours."],
     recommendation:
-      "One mention, but at a $$$ price point bathrooms are part of the experience. Add a 7pm and 9pm sweep to the closing checklist with initials on the door card — a two-minute fix that protects the date-night impression you're selling.",
+      "Only one mention so far, but at a $$$ price point bathrooms are part of the experience. A 7pm and 9pm sweep added to the checklist, with initials on the door card, could be a simple two-minute habit that protects the date-night impression you're selling.",
   },
 ];
 

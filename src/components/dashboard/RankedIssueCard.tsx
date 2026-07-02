@@ -162,7 +162,7 @@ export default function RankedIssueCard({
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-forest" />
                   <p className="text-[11px] font-semibold text-forest uppercase tracking-[0.14em]">
-                    What to do about it
+                    Our recommendation
                   </p>
                   <span className="text-[10px] text-ink-faint ml-1">
                     based on your restaurant profile
@@ -174,6 +174,22 @@ export default function RankedIssueCard({
               </div>
             )}
           </div>
+        )}
+
+        {/* Collapsed: recommendation is always one click away, never hidden */}
+        {!expanded && issue.recommendation && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="mt-3 ml-12 flex items-center gap-2 text-left group max-w-full"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-forest shrink-0" />
+            <span className="text-xs text-ink-soft truncate group-hover:text-ink transition-colors">
+              <span className="font-semibold text-forest">
+                Our recommendation:
+              </span>{" "}
+              {issue.recommendation}
+            </span>
+          </button>
         )}
       </div>
     </div>

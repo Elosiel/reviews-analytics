@@ -185,7 +185,7 @@ export function buildDigestHtml(data: DigestData): string {
 
     <!-- Footer -->
     <div style="text-align:center;color:${INK_FAINT};font-size:11px;line-height:1.6;">
-      <p style="margin:0;">Reviews Analytics · Read-only intelligence — we never post on your behalf.</p>
+      <p style="margin:0;">Reviews Analytics · Intelligence powered by your guest reviews.</p>
       <p style="margin:4px 0 0;">
         <a href="${data.app_url}/dashboard/settings" style="color:${INK_FAINT};">Manage settings</a>
         · Guest quotes shown only from rolling 30-day window per Google ToS.

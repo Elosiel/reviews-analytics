@@ -1,10 +1,10 @@
 /**
  * Google Business Profile OAuth helpers — READ-ONLY.
  *
- * This product NEVER writes back to Google. No replies, no posts.
- * The OAuth consent screen should say:
- * "We need read access to your Google reviews to build your report.
- *  We never post anything on your behalf."
+ * v1.0 never writes back to Google. No replies, no posts.
+ * The user-facing consent copy should say:
+ * "We need access to your Google reviews to build your report.
+ *  Your listing and reviews stay exactly as they are."
  *
  * Scope note: `business.manage` is currently the only scope the GBP API
  * accepts for reviews.list and batchGetReviews, even for read-only access.
