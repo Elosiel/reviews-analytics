@@ -25,12 +25,13 @@ function LoginInner() {
       ? "Sign-in failed. Please try again."
       : null
   );
-  const supabase = createClient();
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setEmailLoading(true);
+    // Client created lazily — building the page must not require Supabase env
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -51,6 +52,7 @@ function LoginInner() {
   async function handleGoogleSignIn() {
     setError(null);
     setGoogleLoading(true);
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
