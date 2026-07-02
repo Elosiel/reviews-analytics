@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import LogoMark from "@/components/shared/LogoMark";
 
 export default function LoginPage() {
   return (
@@ -75,7 +76,8 @@ function LoginInner() {
     <div className="min-h-screen flex">
       {/* Left panel — branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-zinc-950 flex-col justify-between p-12">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <LogoMark className="w-8 h-8" />
           <span className="text-white font-semibold text-lg tracking-tight">
             Reviews Analytics
           </span>
@@ -118,7 +120,8 @@ function LoginInner() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-white">
         <div className="w-full max-w-sm space-y-8">
           {/* Logo (mobile only) */}
-          <div className="lg:hidden text-center">
+          <div className="lg:hidden flex items-center justify-center gap-2.5">
+            <LogoMark className="w-7 h-7" />
             <span className="font-semibold text-xl tracking-tight">
               Reviews Analytics
             </span>
