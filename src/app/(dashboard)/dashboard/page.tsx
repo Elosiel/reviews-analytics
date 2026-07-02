@@ -95,6 +95,9 @@ export default function DashboardPage() {
         </h1>
       </div>
 
+      {/* ── Monday brief — the headline story, delivered ── */}
+      <MondayBriefCard />
+
       {/* ── Danger flags first, always ── */}
       <NeedsAttentionBanner items={MOCK_NEEDS_ATTENTION} />
 
@@ -270,9 +273,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
-      {/* ── Monday brief ── */}
-      <MondayBriefCard />
 
       {/* Shift meeting card modal */}
       {exportIssue && (
