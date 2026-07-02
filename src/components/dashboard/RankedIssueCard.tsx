@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, MapPin, Printer } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin, Printer, Sparkles } from "lucide-react";
 import type { RankedIssue } from "@/types";
 import { cn } from "@/lib/utils";
 import { CATEGORY_LABELS, SEVERITY_STYLE, fmtScore } from "@/lib/design";
@@ -138,20 +138,41 @@ export default function RankedIssueCard({
           </div>
         </div>
 
-        {/* Quotes */}
-        {expanded && issue.quotes.length > 0 && (
-          <div className="mt-4 ml-12 space-y-2">
-            <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em]">
-              What guests are saying right now · last 30 days
-            </p>
-            {issue.quotes.map((q, i) => (
-              <blockquote
-                key={i}
-                className="border-l-2 border-line pl-3 text-sm text-ink-soft italic leading-relaxed"
-              >
-                &ldquo;{q}&rdquo;
-              </blockquote>
-            ))}
+        {/* Quotes + recommendation */}
+        {expanded && (
+          <div className="mt-4 ml-12 space-y-4">
+            {issue.quotes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em]">
+                  What guests are saying right now · last 30 days
+                </p>
+                {issue.quotes.map((q, i) => (
+                  <blockquote
+                    key={i}
+                    className="border-l-2 border-line pl-3 text-sm text-ink-soft italic leading-relaxed"
+                  >
+                    &ldquo;{q}&rdquo;
+                  </blockquote>
+                ))}
+              </div>
+            )}
+
+            {issue.recommendation && (
+              <div className="rounded-xl bg-[#f0f4ee] border border-forest/15 p-4">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-forest" />
+                  <p className="text-[11px] font-semibold text-forest uppercase tracking-[0.14em]">
+                    What to do about it
+                  </p>
+                  <span className="text-[10px] text-ink-faint ml-1">
+                    based on your restaurant profile
+                  </span>
+                </div>
+                <p className="text-sm text-[#2c3d2f] leading-relaxed">
+                  {issue.recommendation}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

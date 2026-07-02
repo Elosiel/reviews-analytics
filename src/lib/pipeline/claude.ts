@@ -12,7 +12,13 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { ClaudeAnalysisRequest, ClaudeAnalysisResponse, SentimentCategory } from "@/types";
+import type {
+  ClaudeAnalysisRequest,
+  ClaudeAnalysisResponse,
+  RankedIssue,
+  RestaurantProfile,
+  SentimentCategory,
+} from "@/types";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -101,4 +107,47 @@ Classify this review.`;
   };
 
   return parsed;
+}
+
+/**
+ * Recommendation generation — runs at rollup time, per ranked issue.
+ * Unlike classification (which stays objective), this is where the
+ * restaurant profile matters: the same complaint means different things
+ * at a date-night spot vs a sports bar. Output is one short, operator-
+ * ready paragraph the owner can act on before tonight's service.
+ */
+export async function generateRecommendation(
+  issue: Pick<
+    RankedIssue,
+    "category" | "location_name" | "mention_count" | "avg_sentiment_score" | "sentiment_delta" | "quotes"
+  >,
+  profile: RestaurantProfile
+): Promise<string> {
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 300,
+    system: `You are an experienced restaurant operations consultant. Given a review-sentiment issue and the restaurant's profile, write ONE short paragraph (3-4 sentences) of concrete, specific action the owner can take this week. Ground it in the guest quotes. Use the profile — mission, target guests, price point, goals — to judge what matters most. Plain language: guests, tables, shifts, dollars. No preamble, no bullet points, no headers. Never suggest replying to or contacting reviewers — this product is read-only.`,
+    messages: [
+      {
+        role: "user",
+        content: `RESTAURANT PROFILE
+Mission: ${profile.mission}
+Style: ${profile.cuisine_style}
+Target guests: ${profile.target_guests}
+Price point: ${profile.price_point}
+Goals: ${profile.goals}
+Notes: ${profile.notes}
+
+ISSUE
+Category: ${issue.category} at ${issue.location_name}
+Mentions (30d): ${issue.mention_count} · Avg sentiment: ${issue.avg_sentiment_score.toFixed(2)}${issue.sentiment_delta !== null ? ` · Change vs prior: ${issue.sentiment_delta.toFixed(2)}` : ""}
+Guest quotes:
+${issue.quotes.map((q) => `- "${q}"`).join("\n")}
+
+Write the recommendation.`,
+      },
+    ],
+  });
+
+  return message.content[0]?.type === "text" ? message.content[0].text.trim() : "";
 }

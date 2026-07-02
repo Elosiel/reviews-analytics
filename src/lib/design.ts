@@ -44,18 +44,23 @@ export function scoreInk(score: number): string {
 }
 
 /**
- * Diverging heatmap step for a score in [-1, 1].
+ * Diverging heatmap ramp for scores in [-1, 1] — deep poles validated
+ * (worst adjacent CVD ΔE 18.2, both ≥3:1 on #fffdf8).
  * Light mid-steps recede toward the surface (sequential-encoding rule);
  * every cell renders its numeric value, so no cell is color-alone.
  */
+export const HEAT_RAMP = [
+  "#b92e20", "#e07a5f", "#f3cbba", "#eceadf", "#c2ddcf", "#5ea88b", "#0a7150",
+] as const;
+
 export function heatStep(score: number): { bg: string; ink: string } {
-  if (score <= -0.5) return { bg: "#c73527", ink: "#fffdf8" };
-  if (score <= -0.2) return { bg: "#e8917b", ink: "#3d1408" };
-  if (score < 0) return { bg: "#f5d2c5", ink: "#3d1408" };
-  if (score < 0.2) return { bg: "#edeadf", ink: "#5f594c" };
-  if (score < 0.5) return { bg: "#c9e0d4", ink: "#0d3325" };
-  if (score < 0.75) return { bg: "#6fb197", ink: "#0d3325" };
-  return { bg: "#0b7d5a", ink: "#fffdf8" };
+  if (score <= -0.5) return { bg: HEAT_RAMP[0], ink: "#fff6f2" };
+  if (score <= -0.2) return { bg: HEAT_RAMP[1], ink: "#3a1109" };
+  if (score < 0) return { bg: HEAT_RAMP[2], ink: "#3a1109" };
+  if (score < 0.2) return { bg: HEAT_RAMP[3], ink: "#5f594c" };
+  if (score < 0.5) return { bg: HEAT_RAMP[4], ink: "#0c3122" };
+  if (score < 0.75) return { bg: HEAT_RAMP[5], ink: "#0c3122" };
+  return { bg: HEAT_RAMP[6], ink: "#f2faf6" };
 }
 
 /** Status styling for alert severity — icon + label always accompany color */

@@ -12,8 +12,22 @@ import type {
   RankedIssue,
   DriftAlert,
   Location,
+  RestaurantProfile,
   SentimentCategory,
 } from "@/types";
+
+// ── Restaurant profile (collected at onboarding, editable in Settings) ──
+// Recommendations below are written against this profile on purpose —
+// this is what the real Claude pipeline will do per-tenant.
+export const MOCK_PROFILE: RestaurantProfile = {
+  mission:
+    "Coastal Latin cooking that makes an ordinary Tuesday feel like a night away.",
+  cuisine_style: "Coastal Latin, upscale-casual full service",
+  target_guests: "Date nights, business dinners, and neighborhood regulars",
+  price_point: "$$$",
+  goals: "Hold 4.5★ across all three locations and grow private events",
+  notes: "Wynwood skews younger and louder; Coral Gables is the flagship.",
+};
 
 export const MOCK_LOCATIONS: Location[] = [
   {
@@ -117,6 +131,8 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "Waited 20 minutes before anyone acknowledged us.",
       "Staff seemed overwhelmed and inattentive all night.",
     ],
+    recommendation:
+      "Your core guests are date nights — a slow first greeting kills that experience before the food arrives. Set a 90-second greet standard, add one floor lead on Friday and Saturday, and run the greet drill at Tuesday's pre-shift. If staffing is the constraint, cut two tables from the Friday book until hiring catches up. Expect mentions to fall within two weeks.",
   },
   {
     category: "wait_time",
@@ -130,6 +146,8 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "45-minute wait for a table with a reservation.",
       "Food took forever to come out even when the place was half empty.",
     ],
+    recommendation:
+      "Complaints cluster on reservations not being honored — that's a table-matrix problem, not a demand problem. Audit Friday's book against actual turn times, stop double-seating the 7–8pm slot, and quote walk-ins honestly. Business dinners are in your profile; they forgive a wait they were told about, never one they weren't.",
   },
   {
     category: "food",
@@ -143,6 +161,8 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
       "Pasta was cold when it arrived.",
       "Portion sizes have definitely shrunk since last time.",
     ],
+    recommendation:
+      "Cold plates plus 'portions shrunk' usually means food dying in the pass, not the recipe. Check expo coverage on Wynwood's peak nights and whether hot plates are actually being used. Downtown just fixed this exact pattern in six weeks — copy their pass-timing standard before changing the menu.",
   },
   {
     category: "cleanliness",
@@ -153,6 +173,8 @@ export const MOCK_RANKED_ISSUES: RankedIssue[] = [
     sentiment_delta: -0.08,
     severity: "low",
     quotes: ["Bathroom needed attention during peak hours."],
+    recommendation:
+      "One mention, but at a $$$ price point bathrooms are part of the experience. Add a 7pm and 9pm sweep to the closing checklist with initials on the door card — a two-minute fix that protects the date-night impression you're selling.",
   },
 ];
 
@@ -312,4 +334,28 @@ export function mockTrendData(category: SentimentCategory) {
       Math.min(1, base + slope * i + 0.09 * Math.sin(i * 1.7 + phase))
     ),
   }));
+}
+
+// Whole-business average: every category, every location, mention-weighted.
+// Derived from the same category shapes so all views tell one story —
+// a spring dip (Downtown's food problem) followed by a steady recovery.
+export function mockGroupTrend() {
+  const cats = Object.keys(TREND_SHAPE) as SentimentCategory[];
+  const weights: Record<SentimentCategory, number> = {
+    food: 159, service: 155, atmosphere: 154,
+    value: 71, wait_time: 55, cleanliness: 37,
+  };
+  const totalWeight = cats.reduce((s, c) => s + weights[c], 0);
+  return TREND_WEEKS.map((week, i) => {
+    const score =
+      cats.reduce((sum, c) => {
+        const { base, slope, phase } = TREND_SHAPE[c];
+        return (
+          sum +
+          weights[c] *
+            Math.max(-1, Math.min(1, base + slope * i + 0.09 * Math.sin(i * 1.7 + phase)))
+        );
+      }, 0) / totalWeight;
+    return { week, score: Math.round(score * 100) / 100 };
+  });
 }

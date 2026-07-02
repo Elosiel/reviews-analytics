@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
 
-type Step = "connect" | "select" | "syncing" | "done";
+type Step = "connect" | "select" | "profile" | "syncing" | "done";
 
 interface GBPLocation {
   google_location_id: string;
@@ -86,9 +87,8 @@ function OnboardingInner() {
         body: JSON.stringify({ locations: payload }),
       });
       if (!res.ok) throw new Error(await res.text());
-      setStep("syncing");
-      // Give the initial sync a moment, then move to done
-      setTimeout(() => setStep("done"), 3000);
+      // Locations saved — now learn who the restaurant is before syncing
+      setStep("profile");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to save locations.");
     } finally {
@@ -112,9 +112,9 @@ function OnboardingInner() {
       <div className="bg-white border-b border-zinc-100">
         <div className="max-w-2xl mx-auto px-6 py-3">
           <div className="flex items-center gap-2">
-            {(["connect", "select", "done"] as const).map((s, i) => {
-              const labels = ["Connect Google", "Select Locations", "You're all set"];
-              const stepOrder = ["connect", "select", "syncing", "done"];
+            {(["connect", "select", "profile", "done"] as const).map((s, i) => {
+              const labels = ["Connect Google", "Select Locations", "Your Restaurant", "You're all set"];
+              const stepOrder = ["connect", "select", "profile", "syncing", "done"];
               const current = stepOrder.indexOf(step);
               const thisIdx = stepOrder.indexOf(s === "done" ? "done" : s);
               const isComplete = current > thisIdx;
@@ -375,7 +375,31 @@ function OnboardingInner() {
             </div>
           )}
 
-          {/* ── STEP 3: Syncing ── */}
+          {/* ── STEP 3: Restaurant profile — teach the AI who you are ── */}
+          {step === "profile" && (
+            <div className="bg-white rounded-xl border border-zinc-200 p-8 space-y-6">
+              <div className="space-y-2">
+                <h1 className="text-2xl font-semibold text-zinc-900">
+                  Tell us about your restaurant
+                </h1>
+                <p className="text-zinc-500">
+                  Two minutes that make every recommendation smarter. The AI
+                  uses this to judge what matters — a noise complaint means
+                  something different at a date-night spot than a sports bar.
+                </p>
+              </div>
+              <RestaurantProfileForm
+                submitLabel="Save & start first sync"
+                onSaved={() => {
+                  setStep("syncing");
+                  // Give the initial sync a moment, then move to done
+                  setTimeout(() => setStep("done"), 3000);
+                }}
+              />
+            </div>
+          )}
+
+          {/* ── STEP 4: Syncing ── */}
           {step === "syncing" && (
             <div className="bg-white rounded-xl border border-zinc-200 p-12 text-center space-y-6">
               <div className="flex justify-center">
