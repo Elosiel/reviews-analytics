@@ -28,12 +28,23 @@ create table public.profiles (
   updated_at    timestamptz not null default now()
 );
 
--- Helper: set session-level tenant for RLS
+-- Helper: set session-level tenant for RLS (used by service-role/admin jobs
+-- that run their own transaction — pg_cron, reconciliation, digest).
 create or replace function public.set_tenant(p_tenant_id uuid)
 returns void language plpgsql security definer as $$
 begin
   perform set_config('app.current_tenant_id', p_tenant_id::text, true);
 end;
+$$;
+
+-- Helper: the logged-in user's tenant, resolved from their profile row.
+-- This is what user-facing RLS keys off — the Supabase JS client sends a
+-- user JWT (auth.uid()) but can't set a per-request session variable, so
+-- policies on tables the app writes from the browser/SSR must derive the
+-- tenant from auth.uid(), not from app.current_tenant_id.
+create or replace function public.auth_tenant_id()
+returns uuid language sql stable security definer set search_path = public as $$
+  select tenant_id from public.profiles where id = auth.uid();
 $$;
 
 -- ── Restaurant profile — the AI's context for recommendations ─────
@@ -55,8 +66,11 @@ create table public.tenant_profiles (
 );
 
 alter table public.tenant_profiles enable row level security;
+-- Keyed off the logged-in user's tenant so the app can read/write it with
+-- the standard anon+JWT client. (USING also gates INSERT/UPDATE here since
+-- no separate WITH CHECK is given.)
 create policy tenant_profiles_isolation on public.tenant_profiles
-  using (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  for all using (tenant_id = public.auth_tenant_id());
 
 -- ── Restaurant documents — uploaded context for the AI ────────────
 -- Menus, promotions, wine lists, brand notes uploaded on the
@@ -86,7 +100,24 @@ create index tenant_documents_tenant_idx on public.tenant_documents (tenant_id, 
 
 alter table public.tenant_documents enable row level security;
 create policy tenant_documents_isolation on public.tenant_documents
-  using (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  for all using (tenant_id = public.auth_tenant_id());
+
+-- ── Storage: private bucket for the uploaded files ────────────────
+-- Files live at {tenant_id}/{document_id}/{file_name}. RLS on the
+-- objects mirrors the table: a user only touches their own tenant folder.
+insert into storage.buckets (id, name, public)
+  values ('tenant-docs', 'tenant-docs', false)
+  on conflict (id) do nothing;
+
+create policy "tenant docs read" on storage.objects for select
+  using (bucket_id = 'tenant-docs'
+         and (storage.foldername(name))[1] = public.auth_tenant_id()::text);
+create policy "tenant docs insert" on storage.objects for insert
+  with check (bucket_id = 'tenant-docs'
+         and (storage.foldername(name))[1] = public.auth_tenant_id()::text);
+create policy "tenant docs delete" on storage.objects for delete
+  using (bucket_id = 'tenant-docs'
+         and (storage.foldername(name))[1] = public.auth_tenant_id()::text);
 
 -- ── Google OAuth tokens — encrypted at rest ────────────────────────
 -- access_token and refresh_token are stored encrypted (pgcrypto).

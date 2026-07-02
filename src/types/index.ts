@@ -184,8 +184,9 @@ export interface TenantDocument {
   file_name: string;
   mime_type: string;
   size_bytes: number;
+  storage_path?: string;    // path inside the tenant-docs Storage bucket
   uploaded_at: string;
-  // ready = text extracted and available to the AI
+  // ready = stored and available to the AI pipeline
   status: "processing" | "ready";
 }
 

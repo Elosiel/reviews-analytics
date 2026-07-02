@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   CheckCircle2,
   FileText,
@@ -11,9 +11,10 @@ import {
   UploadCloud,
 } from "lucide-react";
 import type { DocumentKind, TenantDocument } from "@/types";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const STORAGE_KEY = "ra_restaurant_documents";
+const BUCKET = "tenant-docs";
 
 const ACCEPT =
   ".pdf,.png,.jpg,.jpeg,.webp,.docx,.doc,.txt,.md,.csv,.xlsx";
@@ -68,102 +69,123 @@ function fmtSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-export function loadDocuments(): TenantDocument[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as TenantDocument[]) : [];
-  } catch {
-    return [];
-  }
+/** Keep the storage key clean; the original name is preserved in file_name. */
+function safeName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function persist(docs: TenantDocument[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+interface RestaurantDocumentsProps {
+  tenantId: string | null;
+  initialDocuments?: TenantDocument[];
 }
 
 /**
  * The document vault — menus, promotions, wine lists, brand notes.
- * Metadata is stored locally for the demo; maps 1:1 to the
- * tenant_documents table + Storage bucket once the live pipeline is wired.
+ * Files go to the private 'tenant-docs' Storage bucket at
+ * {tenant_id}/{document_id}/{file_name}; metadata rows live in
+ * tenant_documents. Both are RLS-scoped to the tenant.
  */
-export default function RestaurantDocuments() {
-  const [docs, setDocs] = useState<TenantDocument[]>([]);
+export default function RestaurantDocuments({
+  tenantId,
+  initialDocuments = [],
+}: RestaurantDocumentsProps) {
+  const [docs, setDocs] = useState<TenantDocument[]>(initialDocuments);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  useEffect(() => {
-    // Async so SSR markup matches the first client render
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setDocs(loadDocuments());
-    });
-    const t = timers.current;
-    return () => {
-      cancelled = true;
-      t.forEach(clearTimeout);
-    };
-  }, []);
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setError(null);
+      if (!tenantId) {
+        setError("We couldn't confirm your account — try reloading the page.");
+        return;
+      }
+      const incoming = Array.from(files);
+      const tooBig = incoming.find((f) => f.size > MAX_SIZE_MB * 1024 * 1024);
+      if (tooBig) {
+        setError(`"${tooBig.name}" is over ${MAX_SIZE_MB} MB — try a smaller export.`);
+        return;
+      }
 
-  const addFiles = useCallback((files: FileList | File[]) => {
-    setError(null);
-    const incoming = Array.from(files);
-    const tooBig = incoming.find((f) => f.size > MAX_SIZE_MB * 1024 * 1024);
-    if (tooBig) {
-      setError(`"${tooBig.name}" is over ${MAX_SIZE_MB} MB — try a smaller export.`);
-      return;
-    }
+      const supabase = createClient();
 
-    const now = Date.now();
-    const added: TenantDocument[] = incoming.map((f, i) => ({
-      id: `doc-${now}-${i}`,
-      kind: guessKind(f.name),
-      title: f.name.replace(/\.[^.]+$/, ""),
-      file_name: f.name,
-      mime_type: f.type || "application/octet-stream",
-      size_bytes: f.size,
-      uploaded_at: new Date(now).toISOString(),
-      status: "processing",
-    }));
+      for (const file of incoming) {
+        const id =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const storagePath = `${tenantId}/${id}/${safeName(file.name)}`;
+        const doc: TenantDocument = {
+          id,
+          tenant_id: tenantId,
+          kind: guessKind(file.name),
+          title: file.name.replace(/\.[^.]+$/, ""),
+          file_name: file.name,
+          mime_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          storage_path: storagePath,
+          uploaded_at: new Date().toISOString(),
+          status: "processing",
+        };
 
-    setDocs((prev) => {
-      const next = [...added, ...prev];
-      persist(next);
-      return next;
-    });
+        // Optimistic row while the upload runs
+        setDocs((prev) => [doc, ...prev]);
 
-    // Reading + extraction happens server-side in the live pipeline;
-    // here a short beat makes the "Read by the AI" state feel earned.
-    added.forEach((doc) => {
-      const t = setTimeout(() => {
-        setDocs((prev) => {
-          const next = prev.map((d) =>
-            d.id === doc.id ? { ...d, status: "ready" as const } : d
-          );
-          persist(next);
-          return next;
+        const { error: upErr } = await supabase.storage
+          .from(BUCKET)
+          .upload(storagePath, file, {
+            contentType: doc.mime_type,
+            upsert: false,
+          });
+        if (upErr) {
+          setDocs((prev) => prev.filter((d) => d.id !== id));
+          setError(`Couldn't upload "${file.name}" — ${upErr.message}`);
+          continue;
+        }
+
+        const { error: dbErr } = await supabase.from("tenant_documents").insert({
+          id,
+          tenant_id: tenantId,
+          kind: doc.kind,
+          title: doc.title,
+          file_name: doc.file_name,
+          mime_type: doc.mime_type,
+          size_bytes: doc.size_bytes,
+          storage_path: storagePath,
+          status: "ready",
+          uploaded_at: doc.uploaded_at,
         });
-      }, 1200);
-      timers.current.push(t);
-    });
-  }, []);
+        if (dbErr) {
+          // Roll back the orphaned object so storage and table stay in sync
+          await supabase.storage.from(BUCKET).remove([storagePath]);
+          setDocs((prev) => prev.filter((d) => d.id !== id));
+          setError(`Couldn't save "${file.name}" — please try again.`);
+          continue;
+        }
 
-  function removeDoc(id: string) {
-    setDocs((prev) => {
-      const next = prev.filter((d) => d.id !== id);
-      persist(next);
-      return next;
-    });
+        setDocs((prev) =>
+          prev.map((d) => (d.id === id ? { ...d, status: "ready" as const } : d))
+        );
+      }
+    },
+    [tenantId]
+  );
+
+  async function removeDoc(id: string) {
+    const target = docs.find((d) => d.id === id);
+    setDocs((prev) => prev.filter((d) => d.id !== id));
+    const supabase = createClient();
+    if (target?.storage_path) {
+      await supabase.storage.from(BUCKET).remove([target.storage_path]);
+    }
+    await supabase.from("tenant_documents").delete().eq("id", id);
   }
 
-  function setKind(id: string, kind: DocumentKind) {
-    setDocs((prev) => {
-      const next = prev.map((d) => (d.id === id ? { ...d, kind } : d));
-      persist(next);
-      return next;
-    });
+  async function setKind(id: string, kind: DocumentKind) {
+    setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, kind } : d)));
+    const supabase = createClient();
+    await supabase.from("tenant_documents").update({ kind }).eq("id", id);
   }
 
   const readyCount = docs.filter((d) => d.status === "ready").length;
@@ -257,8 +279,8 @@ export default function RestaurantDocuments() {
             </p>
             <p className="text-xs text-ink-faint">
               {readyCount === docs.length
-                ? "All read by the AI ✓"
-                : `${readyCount}/${docs.length} read by the AI`}
+                ? "All ready for the AI ✓"
+                : `${readyCount}/${docs.length} ready for the AI`}
             </p>
           </div>
           <div className="divide-y divide-line-soft">
@@ -305,12 +327,12 @@ export default function RestaurantDocuments() {
                   {doc.status === "ready" ? (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-pos shrink-0 w-24 justify-end">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      AI has read it
+                      Ready for AI
                     </span>
                   ) : (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-ink-faint shrink-0 w-24 justify-end">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Reading…
+                      Uploading…
                     </span>
                   )}
 
