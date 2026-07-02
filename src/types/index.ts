@@ -148,8 +148,9 @@ export interface RankedIssue {
 }
 
 // ── Restaurant profile (tenant_profiles) ─────────────────────────
-// Collected at onboarding, editable in Settings. Fed to Claude so
-// recommendations match the restaurant's mission, guests, and goals.
+// Collected at onboarding, editable on the "Your restaurant" page.
+// Fed to Claude so recommendations match the restaurant's mission,
+// guests, and goals.
 export interface RestaurantProfile {
   tenant_id?: string;
   mission: string;          // what the restaurant is about, in the owner's words
@@ -158,6 +159,34 @@ export interface RestaurantProfile {
   price_point: "$" | "$$" | "$$$" | "$$$$";
   goals: string;            // e.g. "hold 4.5★ across all locations, grow private events"
   notes: string;            // anything else the AI should know
+  website_url: string;      // the restaurant's site — AI reads it for voice + facts
+  menu_url: string;         // online menu link, if separate from the site
+}
+
+// ── Restaurant documents (tenant_documents + Storage) ────────────
+// Menus, promotions, wine lists, brand one-pagers — uploaded on the
+// "Your restaurant" page. Text is extracted and fed to Claude alongside
+// the profile so recommendations (and the future Respond tier) can
+// speak with the restaurant's own facts.
+export type DocumentKind =
+  | "menu"
+  | "promotion"
+  | "wine_list"
+  | "brand"
+  | "policy"
+  | "other";
+
+export interface TenantDocument {
+  id: string;
+  tenant_id?: string;
+  kind: DocumentKind;
+  title: string;            // display name, defaults to the file name
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_at: string;
+  // ready = text extracted and available to the AI
+  status: "processing" | "ready";
 }
 
 // Cross-location roll-up — the core group-operator value

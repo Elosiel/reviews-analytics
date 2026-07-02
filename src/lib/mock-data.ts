@@ -27,6 +27,8 @@ export const MOCK_PROFILE: RestaurantProfile = {
   price_point: "$$$",
   goals: "Hold 4.5★ across all three locations and grow private events",
   notes: "Wynwood skews younger and louder; Coral Gables is the flagship.",
+  website_url: "https://www.marisolmiami.com",
+  menu_url: "https://www.marisolmiami.com/menus",
 };
 
 export const MOCK_LOCATIONS: Location[] = [

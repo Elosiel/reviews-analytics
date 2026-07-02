@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import RankedIssueCard from "@/components/dashboard/RankedIssueCard";
+import RecommendationsTable from "@/components/dashboard/RecommendationsTable";
 import ShiftMeetingCard from "@/components/dashboard/ShiftMeetingCard";
 import NeedsAttentionBanner from "@/components/dashboard/NeedsAttentionBanner";
 import ProofOfImpactCard from "@/components/dashboard/ProofOfImpactCard";
@@ -25,7 +26,7 @@ import {
   mockGroupTrend,
 } from "@/lib/mock-data";
 
-type TabId = "issues" | "loves" | "trends";
+type TabId = "issues" | "loves" | "trends" | "recommendations";
 
 export default function DashboardPage() {
   const [activeLocation, setActiveLocation] = useState<string>("all");
@@ -71,10 +72,17 @@ export default function DashboardPage() {
       ? MOCK_LOVES
       : MOCK_LOVES.filter((i) => i.location_id === activeLocation);
 
+  const filteredRecommendations = filteredIssues.filter((i) => i.recommendation);
+
   const TABS = [
     { id: "issues" as TabId, label: "Fix these first", count: filteredIssues.length },
     { id: "loves" as TabId, label: "What guests love", count: filteredLoves.length },
     { id: "trends" as TabId, label: "Category trends", count: null },
+    {
+      id: "recommendations" as TabId,
+      label: "Recommendations",
+      count: filteredRecommendations.length,
+    },
   ];
 
   return (
@@ -94,6 +102,9 @@ export default function DashboardPage() {
           .
         </h1>
       </div>
+
+      {/* ── Monday brief — the headline story, delivered ── */}
+      <MondayBriefCard />
 
       {/* ── Danger flags first, always ── */}
       <NeedsAttentionBanner items={MOCK_NEEDS_ATTENTION} />
@@ -269,10 +280,15 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* ── Monday brief ── */}
-      <MondayBriefCard />
+        {/* Recommendations — the consolidated to-do list */}
+        {activeTab === "recommendations" && (
+          <RecommendationsTable
+            issues={filteredIssues}
+            onExport={setExportIssue}
+          />
+        )}
+      </div>
 
       {/* Shift meeting card modal */}
       {exportIssue && (

@@ -37,9 +37,9 @@ end;
 $$;
 
 -- ── Restaurant profile — the AI's context for recommendations ─────
--- Collected at onboarding, editable in Settings. Fed into the Claude
--- prompt so recommendations match the restaurant's mission, guests,
--- price point, and goals. One row per tenant.
+-- Collected at onboarding, editable on the "Your restaurant" page.
+-- Fed into the Claude prompt so recommendations match the restaurant's
+-- mission, guests, price point, and goals. One row per tenant.
 create table public.tenant_profiles (
   tenant_id     uuid primary key,
   mission       text not null default '',
@@ -48,12 +48,44 @@ create table public.tenant_profiles (
   price_point   text not null default '$$' check (price_point in ('$','$$','$$$','$$$$')),
   goals         text not null default '',
   notes         text not null default '',
+  website_url   text not null default '',  -- AI reads it for voice + facts
+  menu_url      text not null default '',  -- online menu, if separate from the site
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
 
 alter table public.tenant_profiles enable row level security;
 create policy tenant_profiles_isolation on public.tenant_profiles
+  using (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+
+-- ── Restaurant documents — uploaded context for the AI ────────────
+-- Menus, promotions, wine lists, brand notes uploaded on the
+-- "Your restaurant" page. Files live in the private 'tenant-docs'
+-- Storage bucket at {tenant_id}/{document_id}/{file_name}; this table
+-- holds metadata + the extracted text the Claude prompt consumes.
+-- Tenant documents are the tenant's own material — no 30-day purge
+-- (that rule is for Google review verbatims only).
+create table public.tenant_documents (
+  id             uuid primary key default uuid_generate_v4(),
+  tenant_id      uuid not null,
+  kind           text not null default 'other'
+                 check (kind in ('menu','promotion','wine_list','brand','policy','other')),
+  title          text not null,
+  file_name      text not null,
+  mime_type      text not null,
+  size_bytes     bigint not null,
+  storage_path   text not null,            -- path inside the tenant-docs bucket
+  extracted_text text,                     -- filled by the extraction job; null = processing
+  status         text not null default 'processing'
+                 check (status in ('processing','ready')),
+  uploaded_at    timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create index tenant_documents_tenant_idx on public.tenant_documents (tenant_id, uploaded_at desc);
+
+alter table public.tenant_documents enable row level security;
+create policy tenant_documents_isolation on public.tenant_documents
   using (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
 
 -- ── Google OAuth tokens — encrypted at rest ────────────────────────

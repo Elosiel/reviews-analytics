@@ -1,8 +1,6 @@
 "use client";
 
 import { Mail } from "lucide-react";
-import { CATEGORY_LABELS } from "@/lib/design";
-import { MOCK_WEEK } from "@/lib/mock-data";
 
 /**
  * The weekly digest tie-in: what lands in the owner's inbox Monday 7:00.
@@ -19,11 +17,9 @@ export default function MondayBriefCard() {
           Your Monday brief lands at 7:00 AM
         </p>
         <p className="text-sm text-paper/70 mt-1 leading-relaxed">
-          The week&apos;s three headlines, in your inbox before the doors open:
-          what guests loved ({CATEGORY_LABELS[MOCK_WEEK.best.category].toLowerCase()} at{" "}
-          {MOCK_WEEK.best.location}), what needs a fix (
-          {CATEGORY_LABELS[MOCK_WEEK.worst.category].toLowerCase()} at{" "}
-          {MOCK_WEEK.worst.location}), and how your rating moved.
+          This week&apos;s story — what guests loved, what needs a fix, and how
+          your rating moved — lands in your inbox before the doors open. No
+          dashboard visit required.
         </p>
       </div>
       <div className="text-left sm:text-right shrink-0">
