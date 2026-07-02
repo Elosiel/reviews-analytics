@@ -183,6 +183,11 @@ and email/password keeps working.
 
 ## Troubleshooting
 
+- **`No Output Directory named "build" found after the Build completed`** —
+  the Vercel project's Framework Preset is set to "Other" instead of Next.js.
+  The repo's `vercel.json` (`"framework": "nextjs"`) forces the correct
+  framework, but you can also fix the setting under **Project Settings →
+  Build & Development Settings → Framework Preset → Next.js**.
 - **Login redirects back to /login** — Supabase URL/anon key missing or wrong in
   Vercel env; check they're set for the Production environment and redeploy.
 - **`relation "cron.job" does not exist`** — pg_cron extension didn't enable;
