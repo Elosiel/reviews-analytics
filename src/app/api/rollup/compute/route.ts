@@ -77,20 +77,8 @@ export async function POST(request: Request) {
           const windowStart = new Date();
           windowStart.setDate(windowStart.getDate() - windowDays);
 
-          // Current window: reviews in last windowDays
-          const { data: currentRows } = await supabase
-            .from("review_categories")
-            .select("sentiment_score, sentiment")
-            .eq("tenant_id", loc.tenant_id)
-            .eq("category", category)
-            .gte(
-              "review_id",
-              // Use a join via review date — we query through the reviews table
-              // For simplicity: filter by analysis date as a proxy
-              "00000000-0000-0000-0000-000000000000"
-            );
-
-          // Better: join through reviews to get reviewed_at
+          // Current window: reviews in last windowDays, joined through
+          // reviews to filter on reviewed_at and location
           const { data: currentCats } = await supabase
             .from("review_categories")
             .select(`

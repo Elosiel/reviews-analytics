@@ -12,8 +12,6 @@
 import { Resend } from "resend";
 import type { SentimentCategory } from "@/types";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 const CATEGORY_LABELS: Record<SentimentCategory, string> = {
   food: "Food Quality",
   service: "Service",
@@ -193,6 +191,12 @@ export function buildDigestHtml(data: DigestData): string {
 }
 
 export async function sendDigestEmail(data: DigestData) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+  // Instantiated per-send so the app builds and runs before Resend is configured
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
   const html = buildDigestHtml(data);
   const subject = `Your weekly review brief — ${data.week_ending}`;
 

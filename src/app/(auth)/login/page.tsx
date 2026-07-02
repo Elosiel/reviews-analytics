@@ -1,16 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false);
-  const supabase = createClient();
+  return (
+    <Suspense>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+function LoginInner() {
+  const searchParams = useSearchParams();
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error") === "auth_failed"
+      ? "Sign-in failed. Please try again."
+      : null
+  );
+
+  async function handleEmailSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setEmailLoading(true);
+    // Client created lazily — building the page must not require Supabase env
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      setError(
+        error.message === "Invalid login credentials"
+          ? "Invalid email or password."
+          : error.message
+      );
+      setEmailLoading(false);
+      return;
+    }
+    // Full navigation so the middleware picks up the new session cookies
+    window.location.assign("/dashboard");
+  }
 
   async function handleGoogleSignIn() {
-    setLoading(true);
-    await supabase.auth.signInWithOAuth({
+    setError(null);
+    setGoogleLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback`,
@@ -21,7 +64,11 @@ export default function LoginPage() {
         },
       },
     });
-    // No need to setLoading(false) — page will redirect
+    if (error) {
+      setError("Google sign-in is not available yet. Use email and password.");
+      setGoogleLoading(false);
+    }
+    // On success the page redirects — no need to reset loading
   }
 
   return (
@@ -37,11 +84,11 @@ export default function LoginPage() {
         <div className="space-y-6">
           <blockquote className="space-y-3">
             <p className="text-zinc-200 text-2xl font-medium leading-relaxed">
-              "The reviews already tell you what to fix.{" "}
+              &ldquo;The reviews already tell you what to fix.{" "}
               <span className="text-white">
-                You just can't see it through the noise.
+                You just can&apos;t see it through the noise.
               </span>
-              "
+              &rdquo;
             </p>
           </blockquote>
 
@@ -86,44 +133,81 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="space-y-4">
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+              {error}
+            </p>
+          )}
+
+          {/* Email + password */}
+          <form onSubmit={handleEmailSignIn} className="space-y-3">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="email"
+                className="text-xs font-medium text-zinc-700"
+              >
+                Email
+              </label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@restaurant.com"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label
+                htmlFor="password"
+                className="text-xs font-medium text-zinc-700"
+              >
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="h-11"
+              />
+            </div>
             <Button
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full h-11 bg-zinc-900 hover:bg-zinc-800 text-white font-medium gap-3"
+              type="submit"
+              disabled={emailLoading || googleLoading}
+              className="w-full h-11 bg-zinc-900 hover:bg-zinc-800 text-white font-medium"
             >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                  Signing in…
-                </span>
-              ) : (
-                <>
-                  <GoogleIcon />
-                  Continue with Google
-                </>
-              )}
+              {emailLoading ? <Spinner label="Signing in…" /> : "Sign in"}
             </Button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-zinc-100" />
+            <span className="text-xs text-zinc-400">or</span>
+            <div className="h-px flex-1 bg-zinc-100" />
           </div>
+
+          <Button
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading || emailLoading}
+            variant="outline"
+            className="w-full h-11 font-medium gap-3"
+          >
+            {googleLoading ? (
+              <Spinner label="Signing in…" />
+            ) : (
+              <>
+                <GoogleIcon />
+                Continue with Google
+              </>
+            )}
+          </Button>
 
           <div className="space-y-3 rounded-lg bg-zinc-50 border border-zinc-100 p-4">
             <p className="text-xs font-medium text-zinc-700">
@@ -170,6 +254,34 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Spinner({ label }: { label: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      <svg
+        className="animate-spin h-4 w-4"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+        />
+        <path
+          className="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
+      {label}
+    </span>
   );
 }
 

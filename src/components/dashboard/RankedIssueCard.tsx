@@ -169,7 +169,7 @@ export default function RankedIssueCard({
                 key={i}
                 className="border-l-2 border-zinc-200 pl-3 text-sm text-zinc-600 italic"
               >
-                "{q}"
+                &ldquo;{q}&rdquo;
               </blockquote>
             ))}
           </div>

@@ -158,7 +158,7 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
                   key={i}
                   className="border-l-2 border-zinc-200 pl-3 text-sm text-zinc-600 italic"
                 >
-                  "{q}"
+                  &ldquo;{q}&rdquo;
                 </blockquote>
               ))}
             </div>
@@ -166,7 +166,7 @@ ACTION: Address ${CATEGORY_LABELS[issue.category].toLowerCase()} issues at ${iss
 
           <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-3">
             <p className="text-xs font-medium text-zinc-700">
-              Action for today's shift
+              Action for today&apos;s shift
             </p>
             <p className="text-sm text-zinc-600 mt-1">
               Address{" "}
