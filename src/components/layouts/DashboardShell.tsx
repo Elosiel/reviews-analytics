@@ -14,17 +14,16 @@ import {
   Menu,
   X,
   AlertTriangle,
+  Reply,
 } from "lucide-react";
-import LogoMark from "@/components/shared/LogoMark";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import LogoMark from "@/components/shared/LogoMark";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
-  badge?: number;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -66,10 +65,10 @@ export default function DashboardShell({
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-zinc-100">
-        <Link href="/dashboard" className="flex items-center gap-2">
+      <div className="px-5 py-5 border-b border-line-soft">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
           <LogoMark className="w-7 h-7" />
-          <span className="font-semibold text-zinc-900 text-sm tracking-tight">
+          <span className="font-heading font-semibold text-ink text-[15px] tracking-tight">
             Reviews Analytics
           </span>
         </Link>
@@ -89,56 +88,68 @@ export default function DashboardShell({
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-zinc-900 text-white"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                  ? "bg-forest text-paper"
+                  : "text-ink-soft hover:bg-line-soft hover:text-ink"
               )}
             >
               <Icon className="w-4 h-4 shrink-0" />
               {item.label}
               {item.label === "Overview" && driftAlertCount > 0 && (
-                <Badge className="ml-auto text-xs bg-red-100 text-red-700 border-0 px-1.5 py-0">
+                <span className="ml-auto text-[11px] font-semibold bg-[#fbeeea] text-neg rounded-full px-1.5 py-0.5 tabular-nums">
                   {driftAlertCount}
-                </Badge>
+                </span>
               )}
             </Link>
           );
         })}
+
+        {/* Respond tier teaser — not part of 1.0 */}
+        <div
+          className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-ink-faint/70 cursor-default select-none"
+          title="Answering reviews is on the roadmap"
+        >
+          <Reply className="w-4 h-4 shrink-0" />
+          Respond
+          <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide bg-line-soft text-ink-faint rounded-full px-2 py-0.5">
+            Soon
+          </span>
+        </div>
       </nav>
 
       {/* Drift alert callout */}
       {driftAlertCount > 0 && (
-        <div className="mx-3 mb-3 rounded-lg bg-red-50 border border-red-100 p-3 space-y-1">
+        <div className="mx-3 mb-3 rounded-xl bg-[#fbeeea] border border-neg/20 p-3 space-y-1">
           <div className="flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-xs font-medium text-red-700">
+            <AlertTriangle className="w-3.5 h-3.5 text-neg" />
+            <span className="text-xs font-semibold text-[#7a1f13]">
               {driftAlertCount} drift alert{driftAlertCount !== 1 ? "s" : ""}
             </span>
           </div>
-          <p className="text-xs text-red-600">
+          <p className="text-xs text-[#8a5347]">
             Declining sentiment detected. Check your overview.
           </p>
         </div>
       )}
 
       {/* User */}
-      <div className="px-3 pb-4 border-t border-zinc-100 pt-3">
+      <div className="px-3 pb-4 border-t border-line-soft pt-3">
         <div className="flex items-center gap-3 px-2 py-2">
           <Avatar className="w-7 h-7">
             <AvatarImage src={user?.avatar_url ?? undefined} />
-            <AvatarFallback className="bg-zinc-200 text-zinc-700 text-xs font-medium">
+            <AvatarFallback className="bg-forest/10 text-forest text-xs font-semibold">
               {initials}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-zinc-900 truncate">
+            <p className="text-xs font-medium text-ink truncate">
               {user?.full_name ?? user?.email ?? "Account"}
             </p>
           </div>
           <button
             onClick={handleSignOut}
-            className="text-zinc-400 hover:text-zinc-700 transition-colors"
+            className="text-ink-faint hover:text-ink transition-colors"
             title="Sign out"
           >
             <LogOut className="w-4 h-4" />
@@ -149,9 +160,9 @@ export default function DashboardShell({
   );
 
   return (
-    <div className="flex h-screen bg-zinc-50 overflow-hidden">
+    <div className="flex h-screen bg-cream overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-56 bg-white border-r border-zinc-100 shrink-0">
+      <aside className="hidden lg:flex lg:flex-col w-60 bg-paper border-r border-line shrink-0">
         {sidebarContent}
       </aside>
 
@@ -159,10 +170,10 @@ export default function DashboardShell({
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
-            className="fixed inset-0 bg-black/40"
+            className="fixed inset-0 bg-ink/40"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative w-56 bg-white border-r border-zinc-100 z-10">
+          <aside className="relative w-60 bg-paper border-r border-line z-10">
             {sidebarContent}
           </aside>
         </div>
@@ -171,7 +182,7 @@ export default function DashboardShell({
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile header */}
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-zinc-100">
+        <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-paper border-b border-line">
           <Button
             variant="ghost"
             size="icon"
@@ -184,7 +195,7 @@ export default function DashboardShell({
               <Menu className="w-4 h-4" />
             )}
           </Button>
-          <span className="font-semibold text-zinc-900 text-sm tracking-tight">
+          <span className="font-heading font-semibold text-ink text-sm tracking-tight">
             Reviews Analytics
           </span>
         </header>

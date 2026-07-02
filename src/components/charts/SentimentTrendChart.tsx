@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  LineChart,
-  Line,
+  Area,
+  AreaChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { POS, NEG, fmtScore } from "@/lib/design";
 
 interface DataPoint {
   week: string;
@@ -18,70 +19,79 @@ interface DataPoint {
 
 interface SentimentTrendChartProps {
   data: DataPoint[];
-  color?: string;
-}
-
-function scoreToColor(score: number): string {
-  if (score >= 0.2) return "#10b981"; // emerald
-  if (score >= -0.1) return "#f59e0b"; // amber
-  return "#ef4444"; // red
+  /** Unique id per chart instance so gradient defs don't collide */
+  id: string;
+  height?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const score: number = payload[0].value;
-  const color = scoreToColor(score);
-  const label2 =
-    score >= 0.2 ? "Positive" : score >= -0.1 ? "Neutral" : "Negative";
+  const mood =
+    score >= 0.2 ? "Positive" : score <= -0.2 ? "Negative" : "Mixed";
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg shadow-sm px-3 py-2 text-xs">
-      <p className="text-zinc-500 mb-1">{label}</p>
-      <p className="font-semibold" style={{ color }}>
-        {score > 0 ? "+" : ""}
-        {score.toFixed(2)} — {label2}
+    <div className="bg-paper border border-line rounded-lg shadow-sm px-3 py-2 text-xs">
+      <p className="text-ink-faint mb-0.5">Week of {label}</p>
+      <p className="font-semibold text-ink tabular-nums">
+        {fmtScore(score)}{" "}
+        <span className="font-normal text-ink-soft">· {mood}</span>
       </p>
     </div>
   );
 }
 
+/**
+ * Weekly sentiment trend for one category. Single series — the panel title
+ * names it (no legend), and the line color encodes polarity of the current
+ * value, always paired with the visible signed delta next to the title.
+ */
 export default function SentimentTrendChart({
   data,
-  color,
+  id,
+  height = 120,
 }: SentimentTrendChartProps) {
   const lastScore = data[data.length - 1]?.score ?? 0;
-  const lineColor = color ?? scoreToColor(lastScore);
+  const lineColor = lastScore >= 0 ? POS : NEG;
+  const gradId = `trend-${id}`;
 
   return (
-    <ResponsiveContainer width="100%" height={120}>
-      <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" vertical={false} />
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={lineColor} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="#f1ecdf" vertical={false} />
         <XAxis
           dataKey="week"
-          tick={{ fontSize: 10, fill: "#a1a1aa" }}
+          tick={{ fontSize: 10, fill: "#97907f" }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           domain={[-1, 1]}
-          tick={{ fontSize: 10, fill: "#a1a1aa" }}
+          ticks={[-1, 0, 1]}
+          tick={{ fontSize: 10, fill: "#97907f" }}
           tickLine={false}
           axisLine={false}
-          tickCount={3}
-          tickFormatter={(v: number) => v.toFixed(1)}
+          tickFormatter={(v: number) => (v > 0 ? `+${v}` : `${v}`)}
         />
-        <ReferenceLine y={0} stroke="#e4e4e7" strokeDasharray="4 4" />
-        <Tooltip content={<CustomTooltip />} />
-        <Line
+        <ReferenceLine y={0} stroke="#c9c2ae" strokeDasharray="4 4" />
+        <Tooltip content={<CustomTooltip />} cursor={{ stroke: "#c9c2ae" }} />
+        <Area
           type="monotone"
           dataKey="score"
           stroke={lineColor}
           strokeWidth={2}
+          fill={`url(#${gradId})`}
           dot={false}
-          activeDot={{ r: 4, fill: lineColor, strokeWidth: 0 }}
+          activeDot={{ r: 4, fill: lineColor, strokeWidth: 2, stroke: "#fffdf8" }}
         />
-      </LineChart>
+      </AreaChart>
     </ResponsiveContainer>
   );
 }
