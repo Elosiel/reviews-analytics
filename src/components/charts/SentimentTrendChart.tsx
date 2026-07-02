@@ -89,6 +89,7 @@ export default function SentimentTrendChart({
           strokeWidth={2}
           fill={`url(#${gradId})`}
           dot={false}
+          isAnimationActive={false}
           activeDot={{ r: 4, fill: lineColor, strokeWidth: 2, stroke: "#fffdf8" }}
         />
       </AreaChart>

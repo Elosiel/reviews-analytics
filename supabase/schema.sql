@@ -36,6 +36,26 @@ begin
 end;
 $$;
 
+-- ── Restaurant profile — the AI's context for recommendations ─────
+-- Collected at onboarding, editable in Settings. Fed into the Claude
+-- prompt so recommendations match the restaurant's mission, guests,
+-- price point, and goals. One row per tenant.
+create table public.tenant_profiles (
+  tenant_id     uuid primary key,
+  mission       text not null default '',
+  cuisine_style text not null default '',
+  target_guests text not null default '',
+  price_point   text not null default '$$' check (price_point in ('$','$$','$$$','$$$$')),
+  goals         text not null default '',
+  notes         text not null default '',
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+alter table public.tenant_profiles enable row level security;
+create policy tenant_profiles_isolation on public.tenant_profiles
+  using (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+
 -- ── Google OAuth tokens — encrypted at rest ────────────────────────
 -- access_token and refresh_token are stored encrypted (pgcrypto).
 -- The encryption key comes from the app env, never the DB.

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, CheckCircle, RefreshCw, Plus } from "lucide-react";
+import { AlertTriangle, CheckCircle, RefreshCw, Plus, Sparkles } from "lucide-react";
+import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -29,33 +29,63 @@ export default async function SettingsPage() {
   const monthlyPrice = locationCount * 89;
 
   return (
-    <div className="px-6 py-8 max-w-2xl mx-auto space-y-8">
+    <div className="px-6 py-10 max-w-2xl mx-auto space-y-7">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900">Settings</h1>
-        <p className="text-sm text-zinc-500 mt-0.5">
-          Manage your account and connected locations
+        <p className="text-[11px] uppercase tracking-[0.16em] text-ink-faint font-medium">
+          Settings
         </p>
+        <h1 className="font-heading text-[28px] font-semibold text-ink mt-1.5">
+          Your account
+        </h1>
+      </div>
+
+      {/* Restaurant profile — feeds the AI recommendations */}
+      <div className="bg-paper rounded-2xl border border-line">
+        <div className="px-6 py-5 border-b border-line-soft">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-forest" />
+            <h2 className="font-heading text-lg font-semibold text-ink">
+              Restaurant profile
+            </h2>
+          </div>
+          <p className="text-xs text-ink-soft mt-1">
+            This is how the AI knows who you are. Every recommendation on your
+            dashboard is written against these answers — keep them current.
+          </p>
+        </div>
+        <div className="px-6 py-5">
+          <RestaurantProfileForm />
+        </div>
       </div>
 
       {/* Account */}
-      <div className="bg-white rounded-xl border border-zinc-100 divide-y divide-zinc-50">
+      <div className="bg-paper rounded-2xl border border-line divide-y divide-line-soft">
         <div className="px-6 py-4">
-          <h2 className="text-sm font-semibold text-zinc-900">Account</h2>
+          <h2 className="text-sm font-semibold text-ink">Account</h2>
         </div>
         <div className="px-6 py-4 flex items-center justify-between">
           <div>
-            <p className="text-sm text-zinc-700">{profile?.full_name ?? "—"}</p>
-            <p className="text-xs text-zinc-400">{user?.email}</p>
+            <p className="text-sm text-ink">{profile?.full_name ?? "—"}</p>
+            <p className="text-xs text-ink-faint">{user?.email}</p>
           </div>
-          <Badge className={`text-xs ${plan === "trial" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"} border-0`}>
+          <span
+            className={`text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-1 ${
+              plan === "trial"
+                ? "bg-[#f4dbb1] text-[#5c430e]"
+                : "bg-[#eef6f1] text-pos"
+            }`}
+          >
             {plan}
-          </Badge>
+          </span>
         </div>
         {plan === "trial" && (
-          <div className="px-6 py-4 bg-zinc-50">
-            <p className="text-sm text-zinc-600">
+          <div className="px-6 py-4 bg-cream/60">
+            <p className="text-sm text-ink-soft">
               You&apos;re on a free trial.{" "}
-              <a href="https://reviewsanalytics.ai/pricing" className="text-zinc-900 font-medium underline">
+              <a
+                href="https://reviewsanalytics.ai/pricing"
+                className="text-forest font-medium underline underline-offset-2"
+              >
                 Upgrade to Standard
               </a>{" "}
               — $89/location/month.
@@ -65,16 +95,18 @@ export default async function SettingsPage() {
       </div>
 
       {/* Google connection */}
-      <div className="bg-white rounded-xl border border-zinc-100 divide-y divide-zinc-50">
+      <div className="bg-paper rounded-2xl border border-line divide-y divide-line-soft">
         <div className="px-6 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-900">Google Business Profile</h2>
+          <h2 className="text-sm font-semibold text-ink">
+            Google Business Profile
+          </h2>
           {tokenRow ? (
-            <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+            <div className="flex items-center gap-1.5 text-xs text-pos font-medium">
               <CheckCircle className="w-3.5 h-3.5" />
               Connected
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-xs text-red-600">
+            <div className="flex items-center gap-1.5 text-xs text-neg font-medium">
               <AlertTriangle className="w-3.5 h-3.5" />
               Not connected
             </div>
@@ -83,15 +115,13 @@ export default async function SettingsPage() {
         <div className="px-6 py-4 space-y-3">
           {tokenRow ? (
             <>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-ink-soft">
                 Last refreshed:{" "}
                 {new Date(tokenRow.updated_at).toLocaleDateString("en-US", {
                   month: "short", day: "numeric", year: "numeric",
                 })}
               </p>
-              <p className="text-xs text-zinc-400">
-                Scope: {tokenRow.scope}
-              </p>
+              <p className="text-xs text-ink-faint">Scope: {tokenRow.scope}</p>
               <a href="/api/google/connect">
                 <Button variant="outline" size="sm" className="gap-2">
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -101,7 +131,10 @@ export default async function SettingsPage() {
             </>
           ) : (
             <a href="/api/google/connect">
-              <Button size="sm" className="bg-zinc-900 hover:bg-zinc-800 text-white gap-2">
+              <Button
+                size="sm"
+                className="bg-forest hover:bg-forest-soft text-paper gap-2"
+              >
                 <Plus className="w-3.5 h-3.5" />
                 Connect Google Business Profile
               </Button>
@@ -111,12 +144,12 @@ export default async function SettingsPage() {
       </div>
 
       {/* Locations */}
-      <div className="bg-white rounded-xl border border-zinc-100 divide-y divide-zinc-50">
+      <div className="bg-paper rounded-2xl border border-line divide-y divide-line-soft">
         <div className="px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">Tracked Locations</h2>
+            <h2 className="text-sm font-semibold text-ink">Tracked Locations</h2>
             {locationCount > 0 && (
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-xs text-ink-faint mt-0.5">
                 ${monthlyPrice.toLocaleString()}/month ({locationCount} × $89)
               </p>
             )}
@@ -130,29 +163,35 @@ export default async function SettingsPage() {
         </div>
 
         {!locations || locations.length === 0 ? (
-          <div className="px-6 py-8 text-center text-sm text-zinc-400">
+          <div className="px-6 py-8 text-center text-sm text-ink-faint">
             No locations tracked yet.{" "}
-            <a href="/onboarding" className="text-zinc-700 underline">
+            <a href="/onboarding" className="text-forest underline underline-offset-2">
               Add your first location
             </a>
           </div>
         ) : (
           locations.map((loc) => (
-            <div key={loc.id} className="px-6 py-4 flex items-center justify-between gap-4">
+            <div
+              key={loc.id}
+              className="px-6 py-4 flex items-center justify-between gap-4"
+            >
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-zinc-900 truncate">{loc.name}</p>
+                  <p className="text-sm font-medium text-ink truncate">
+                    {loc.name}
+                  </p>
                   {loc.connection_broken && (
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <AlertTriangle className="w-3.5 h-3.5 text-neg shrink-0" />
                   )}
                 </div>
-                <p className="text-xs text-zinc-400 truncate">{loc.address}</p>
+                <p className="text-xs text-ink-faint truncate">{loc.address}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-sm font-medium text-amber-500">
-                  {loc.rating?.toFixed(1) ?? "—"}★
+                <p className="text-sm font-semibold text-ink tabular-nums">
+                  {loc.rating?.toFixed(1) ?? "—"}
+                  <span className="text-gold">★</span>
                 </p>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-ink-faint">
                   {loc.review_count} reviews
                 </p>
               </div>

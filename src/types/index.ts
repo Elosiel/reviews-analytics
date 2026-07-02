@@ -143,6 +143,21 @@ export interface RankedIssue {
   severity: AlertSeverity | null;
   // Representative verbatim quotes from rolling 30-day window only
   quotes: string[];
+  // AI-generated action, grounded in the quotes + the restaurant profile
+  recommendation?: string;
+}
+
+// ── Restaurant profile (tenant_profiles) ─────────────────────────
+// Collected at onboarding, editable in Settings. Fed to Claude so
+// recommendations match the restaurant's mission, guests, and goals.
+export interface RestaurantProfile {
+  tenant_id?: string;
+  mission: string;          // what the restaurant is about, in the owner's words
+  cuisine_style: string;    // e.g. "Coastal Italian, upscale-casual full service"
+  target_guests: string;    // e.g. "date nights, business dinners, local regulars"
+  price_point: "$" | "$$" | "$$$" | "$$$$";
+  goals: string;            // e.g. "hold 4.5★ across all locations, grow private events"
+  notes: string;            // anything else the AI should know
 }
 
 // Cross-location roll-up — the core group-operator value
