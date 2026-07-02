@@ -6,6 +6,7 @@
 -- ── Extensions ────────────────────────────────────────────────────
 create extension if not exists "uuid-ossp";
 create extension if not exists "pg_cron";        -- scheduled jobs (purge, rollup, digest)
+create extension if not exists "pg_net";         -- HTTP calls from cron jobs to API routes
 create extension if not exists "pgcrypto";       -- for encrypting OAuth tokens at rest
 
 -- ─────────────────────────────────────────────────────────────────

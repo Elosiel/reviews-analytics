@@ -63,7 +63,7 @@ export default function DashboardShell({
         .slice(0, 2)
     : user?.email?.[0]?.toUpperCase() ?? "?";
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 py-5 border-b border-zinc-100">
@@ -154,7 +154,7 @@ export default function DashboardShell({
     <div className="flex h-screen bg-zinc-50 overflow-hidden">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col w-56 bg-white border-r border-zinc-100 shrink-0">
-        <SidebarContent />
+        {sidebarContent}
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -165,7 +165,7 @@ export default function DashboardShell({
             onClick={() => setMobileOpen(false)}
           />
           <aside className="relative w-56 bg-white border-r border-zinc-100 z-10">
-            <SidebarContent />
+            {sidebarContent}
           </aside>
         </div>
       )}

@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Reviews Analytics — App Dashboard
 
-## Getting Started
+Production app for **app.reviewsanalytics.ai** — a review-sentiment intelligence
+engine that reads every Google review across a restaurant group's locations and
+hands the owner a ranked operational to-do list: what's costing them stars, and where.
 
-First, run the development server:
+**Read-only.** It never posts, replies, or drafts anything on the tenant's behalf.
+
+> The marketing site (`reviewsanalytics.ai`) lives in a separate repo. This repo is
+> the app dashboard only. See [`CLAUDE.md`](./CLAUDE.md) for the full product spec.
+
+## Stack
+
+Next.js (App Router) + TypeScript · shadcn/ui + Tailwind v4 · Supabase (Postgres,
+RLS, Auth) · pg_cron · Anthropic Claude (sentiment) · Resend (weekly digest) ·
+Google Business Profile API (read-only OAuth)
+
+## Quick start (local)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.local.example .env.local   # fill in at least the Supabase values
+npm run dev                        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Minimum to run locally: a free [Supabase](https://supabase.com) project.
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local`,
+then run `supabase/schema.sql` in the Supabase SQL Editor.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Demo login (before Google API approval)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Google Business Profile API access is pending approval, so the app supports
+**email + password sign-in** for demos and design partners:
 
-## Learn More
+1. Supabase dashboard → **Authentication → Users → Add user → Create new user**
+2. Enter an email + password, check **Auto Confirm User**, create
+3. Sign in at `/login` with those credentials — the dashboard renders with
+   realistic demo data until real locations are connected
 
-To learn more about Next.js, take a look at the following resources:
+## Deploying to production
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Full step-by-step guide (Supabase → Vercel → Porkbun DNS → Google Cloud → Resend):
+**[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Commands
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev     # Dev server on localhost:3000
+npm run build   # Production build
+npm run lint    # ESLint
+```

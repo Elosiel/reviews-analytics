@@ -54,7 +54,7 @@ export default async function SettingsPage() {
         {plan === "trial" && (
           <div className="px-6 py-4 bg-zinc-50">
             <p className="text-sm text-zinc-600">
-              You're on a free trial.{" "}
+              You&apos;re on a free trial.{" "}
               <a href="https://reviewsanalytics.ai/pricing" className="text-zinc-900 font-medium underline">
                 Upgrade to Standard
               </a>{" "}

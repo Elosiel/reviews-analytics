@@ -170,7 +170,7 @@ function OnboardingInner() {
 
               <div className="rounded-lg bg-zinc-50 border border-zinc-100 p-5 space-y-3">
                 <p className="text-sm font-medium text-zinc-700">
-                  What we'll access
+                  What we&apos;ll access
                 </p>
                 <ul className="space-y-2">
                   {[
@@ -237,7 +237,7 @@ function OnboardingInner() {
               </div>
 
               <p className="text-xs text-zinc-400">
-                After connecting, you'll choose which of your locations to track.
+                After connecting, you&apos;ll choose which of your locations to track.
               </p>
             </div>
           )}
@@ -265,7 +265,7 @@ function OnboardingInner() {
                 <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center space-y-2">
                   <p className="text-zinc-500">No locations found on this account.</p>
                   <p className="text-sm text-zinc-400">
-                    Make sure you're connected to the correct Google account.
+                    Make sure you&apos;re connected to the correct Google account.
                   </p>
                   <Button
                     variant="outline"
@@ -407,7 +407,7 @@ function OnboardingInner() {
                   Pulling your reviews…
                 </h2>
                 <p className="text-zinc-500">
-                  We're fetching and analyzing your review history. This takes a
+                  We&apos;re fetching and analyzing your review history. This takes a
                   moment for the first sync.
                 </p>
               </div>
@@ -447,7 +447,7 @@ function OnboardingInner() {
               </div>
               <div className="space-y-2">
                 <h2 className="text-xl font-semibold text-zinc-900">
-                  You're all set
+                  You&apos;re all set
                 </h2>
                 <p className="text-zinc-500">
                   Your locations are connected. Your first ranked report is
