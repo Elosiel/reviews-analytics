@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="#060a0c" />
+  <!-- Glow layer -->
+  <g fill="none" stroke="#2fe3f0" stroke-width="46" opacity="0.65" filter="url(#glow)">
+    <path d="M92 148 H214 C290 148 290 296 214 296 H186 L110 448" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M214 296 L298 448" stroke-linecap="round" />
+    <path d="M282 450 L372 178 L462 450" stroke-linecap="round" stroke-linejoin="miter" />
+  </g>
+  <!-- Crisp layer -->
+  <g fill="none" stroke="#3ceaf6" stroke-width="46">
+    <path d="M92 148 H214 C290 148 290 296 214 296 H186 L110 448" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M214 296 L298 448" stroke-linecap="round" />
+    <path d="M282 450 L372 178 L462 450" stroke-linecap="round" stroke-linejoin="miter" />
+  </g>
+</svg>

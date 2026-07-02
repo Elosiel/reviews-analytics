@@ -14,8 +14,8 @@ import {
   Menu,
   X,
   AlertTriangle,
-  TrendingUp,
 } from "lucide-react";
+import LogoMark from "@/components/shared/LogoMark";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -68,9 +68,7 @@ export default function DashboardShell({
       {/* Logo */}
       <div className="px-5 py-5 border-b border-zinc-100">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-zinc-900 flex items-center justify-center">
-            <TrendingUp className="w-4 h-4 text-white" />
-          </div>
+          <LogoMark className="w-7 h-7" />
           <span className="font-semibold text-zinc-900 text-sm tracking-tight">
             Reviews Analytics
           </span>
