@@ -17,7 +17,6 @@ import { CATEGORIES, CATEGORY_LABELS, scoreInk, fmtScore } from "@/lib/design";
 import {
   HAS_MAPS_KEY,
   searchDemoPlaces,
-  mapEmbedUrl,
   type PreviewPlace,
 } from "@/lib/preview-demo";
 
@@ -276,8 +275,6 @@ function PlaceResult({
   place: PreviewPlace;
   onBack: () => void;
 }) {
-  const embed = mapEmbedUrl(place);
-
   return (
     <div className="space-y-5">
       <button
@@ -430,7 +427,7 @@ function PlaceResult({
                   Connect your Business Profile and we&apos;ll rank exactly
                   what&apos;s costing you stars — with the quotes to prove it.
                 </p>
-                <a href="/login">
+                <a href="https://reviewsanalytics.ai/start">
                   <Button className="mt-4 w-full bg-forest hover:bg-forest-soft text-paper gap-2">
                     Get started <ArrowRight className="w-4 h-4" />
                   </Button>

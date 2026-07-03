@@ -181,11 +181,3 @@ export function searchDemoPlaces(query: string): PreviewPlace[] {
 export const HAS_MAPS_KEY = Boolean(
   process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 );
-
-/** Free Maps Embed API URL (map visual only — no review data). */
-export function mapEmbedUrl(place: PreviewPlace): string | null {
-  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!key) return null;
-  const q = encodeURIComponent(`${place.name} ${place.address}`);
-  return `https://www.google.com/maps/embed/v1/place?key=${key}&q=${q}`;
-}
