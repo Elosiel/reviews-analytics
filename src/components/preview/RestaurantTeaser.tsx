@@ -265,35 +265,23 @@ function PlaceResult({
         <div className="bg-paper rounded-2xl border border-line overflow-hidden">
           {/* Map */}
           <div className="relative h-40 bg-gradient-to-br from-[#e8ede6] to-[#d7e2d3] border-b border-line">
-            {embed ? (
-              <iframe
-                title={`Map of ${place.name}`}
-                src={embed}
-                className="w-full h-full"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            ) : (
-              <>
-                {/* Stylized map placeholder (no key configured) */}
-                <div
-                  className="absolute inset-0 opacity-40"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
-                    backgroundSize: "22px 22px",
-                  }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <MapPin className="w-7 h-7 text-forest fill-forest/20" />
-                    <span className="text-[11px] text-ink-soft font-medium">
-                      {place.name.split("—").pop()?.trim()}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
+            {/* Always show placeholder — embedded maps require separate API enablement */}
+            <div
+              className="absolute inset-0 opacity-40"
+              style={{
+                backgroundImage:
+                  "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
+                backgroundSize: "22px 22px",
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-1">
+                <MapPin className="w-7 h-7 text-forest fill-forest/20" />
+                <span className="text-[11px] text-ink-soft font-medium">
+                  {place.name.split("—").pop()?.trim()}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div className="p-5">
