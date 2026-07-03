@@ -66,6 +66,7 @@ function ScoreBar({ score }: { score: number }) {
 
 export default function RestaurantTeaser() {
   const [query, setQuery] = useState("");
+  const [locationQuery, setLocationQuery] = useState("");
   const [selected, setSelected] = useState<PreviewPlace | null>(null);
   const [liveResults, setLiveResults] = useState<LiveSearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -83,20 +84,22 @@ export default function RestaurantTeaser() {
   }, []);
 
   // Live search against Google Places, debounced. Demo mode when no key.
-  function handleQueryChange(value: string) {
-    setQuery(value);
+  // The optional location field is appended to the text query — Google's
+  // Text Search parses "name city/state/zip" natively, no dropdowns needed.
+  function scheduleSearch(name: string, loc: string) {
     if (!HAS_MAPS_KEY) return;
     if (debounce.current) clearTimeout(debounce.current);
-    const q = value.trim();
+    const q = name.trim();
     if (q.length < 3) {
       setLiveResults(null);
       setSearching(false);
       return;
     }
+    const full = loc.trim() ? `${q} ${loc.trim()}` : q;
     setSearching(true);
     debounce.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/places/search?q=${encodeURIComponent(full)}`);
         const data = await res.json();
         setLiveResults(Array.isArray(data.places) ? data.places : []);
       } catch {
@@ -105,6 +108,16 @@ export default function RestaurantTeaser() {
         setSearching(false);
       }
     }, 350);
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    scheduleSearch(value, locationQuery);
+  }
+
+  function handleLocationChange(value: string) {
+    setLocationQuery(value);
+    scheduleSearch(query, value);
   }
 
   async function selectLive(result: LiveSearchResult) {
@@ -129,24 +142,38 @@ export default function RestaurantTeaser() {
   return (
     <div className="space-y-5">
       {/* Search */}
-      <div className="relative">
-        {searching ? (
-          <Loader2 className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 animate-spin" />
-        ) : (
-          <Search className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          {searching ? (
+            <Loader2 className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 animate-spin" />
+          ) : (
+            <Search className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            placeholder="Find your restaurant…"
+            className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
+          />
+        </div>
+        {HAS_MAPS_KEY && (
+          <div className="relative sm:w-64">
+            <MapPin className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={locationQuery}
+              onChange={(e) => handleLocationChange(e.target.value)}
+              placeholder="City, state, or ZIP"
+              className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
+            />
+          </div>
         )}
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Find your restaurant…"
-          className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
-        />
       </div>
 
       <p className="text-xs text-ink-faint text-center">
         {HAS_MAPS_KEY
-          ? "Search any restaurant — live Google data. Or start from a sample below."
+          ? "Search any restaurant — add a city to narrow it down. Or start from a sample below."
           : "Preview uses sample restaurants. Once your Business Profile is connected, this reads your real reviews."}
       </p>
 
