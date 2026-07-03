@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowLeft,
+  Loader2,
   Lock,
   MapPin,
   Search,
@@ -12,12 +13,21 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CATEGORY_LABELS, scoreInk, fmtScore } from "@/lib/design";
+import { CATEGORIES, CATEGORY_LABELS, scoreInk, fmtScore } from "@/lib/design";
 import {
+  HAS_MAPS_KEY,
   searchDemoPlaces,
   mapEmbedUrl,
   type PreviewPlace,
 } from "@/lib/preview-demo";
+
+interface LiveSearchResult {
+  id: string;
+  name: string;
+  address: string;
+  rating: number;
+  total_reviews: number;
+}
 
 function Stars({ rating, className }: { rating: number; className?: string }) {
   return (
@@ -57,74 +67,177 @@ function ScoreBar({ score }: { score: number }) {
 export default function RestaurantTeaser() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<PreviewPlace | null>(null);
+  const [liveResults, setLiveResults] = useState<LiveSearchResult[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const results = useMemo(() => searchDemoPlaces(query), [query]);
+  const demoResults = useMemo(() => searchDemoPlaces(query), [query]);
+
+  // Cancel any in-flight debounce on unmount
+  useEffect(() => {
+    const t = debounce;
+    return () => {
+      if (t.current) clearTimeout(t.current);
+    };
+  }, []);
+
+  // Live search against Google Places, debounced. Demo mode when no key.
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (!HAS_MAPS_KEY) return;
+    if (debounce.current) clearTimeout(debounce.current);
+    const q = value.trim();
+    if (q.length < 3) {
+      setLiveResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        setLiveResults(Array.isArray(data.places) ? data.places : []);
+      } catch {
+        setLiveResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+  }
+
+  async function selectLive(result: LiveSearchResult) {
+    setLoadingId(result.id);
+    try {
+      const res = await fetch(`/api/places/details?id=${encodeURIComponent(result.id)}`);
+      const data = await res.json();
+      if (data.place) {
+        setSelected({ ...data.place, is_live: true } as PreviewPlace);
+      }
+    } finally {
+      setLoadingId(null);
+    }
+  }
 
   if (selected) {
     return <PlaceResult place={selected} onBack={() => setSelected(null)} />;
   }
 
+  const liveMode = HAS_MAPS_KEY && query.trim().length >= 3;
+
   return (
     <div className="space-y-5">
       {/* Search */}
       <div className="relative">
-        <Search className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+        {searching ? (
+          <Loader2 className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 animate-spin" />
+        ) : (
+          <Search className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+        )}
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Find your restaurant…"
           className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
         />
       </div>
 
       <p className="text-xs text-ink-faint text-center">
-        Preview uses sample restaurants. Once your Business Profile is
-        connected, this reads your real reviews.
+        {HAS_MAPS_KEY
+          ? "Search any restaurant — live Google data. Or start from a sample below."
+          : "Preview uses sample restaurants. Once your Business Profile is connected, this reads your real reviews."}
       </p>
 
-      {/* Results / sample picker */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {results.map((place) => (
-          <button
-            key={place.id}
-            onClick={() => setSelected(place)}
-            className="text-left bg-paper rounded-2xl border border-line p-4 hover:border-forest/40 hover:shadow-sm transition-all group"
-          >
-            <p className="font-heading font-semibold text-ink text-[15px] leading-snug">
-              {place.name}
-            </p>
-            <p className="text-xs text-ink-faint mt-1 flex items-center gap-1">
-              <MapPin className="w-3 h-3 shrink-0" />
-              <span className="truncate">{place.address}</span>
-            </p>
-            <div className="flex items-center gap-2 mt-3">
-              <Stars rating={place.rating} />
-              <span className="text-sm font-semibold text-ink tabular-nums">
-                {place.rating.toFixed(1)}
-              </span>
-              <span className="text-xs text-ink-faint">
-                ({place.total_reviews})
-              </span>
-            </div>
-            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-forest opacity-0 group-hover:opacity-100 transition-opacity">
-              Preview <ArrowRight className="w-3 h-3" />
-            </span>
-          </button>
-        ))}
-        {results.length === 0 && (
-          <p className="col-span-full text-center py-8 text-sm text-ink-faint">
-            No sample matches “{query}”. Try{" "}
+      {/* Live results */}
+      {liveMode && liveResults && (
+        <div className="space-y-2">
+          {liveResults.map((r) => (
             <button
-              onClick={() => setQuery("")}
-              className="text-forest underline underline-offset-2"
+              key={r.id}
+              onClick={() => selectLive(r)}
+              disabled={loadingId !== null}
+              className="w-full text-left bg-paper rounded-2xl border border-line px-4 py-3 hover:border-forest/40 hover:shadow-sm transition-all flex items-center gap-3 disabled:opacity-60"
             >
-              clearing the search
+              <MapPin className="w-4 h-4 text-forest shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold text-ink truncate">
+                  {r.name}
+                </span>
+                <span className="block text-xs text-ink-faint truncate">
+                  {r.address}
+                </span>
+              </span>
+              {r.rating > 0 && (
+                <span className="text-sm font-semibold text-ink tabular-nums shrink-0">
+                  {r.rating.toFixed(1)}
+                  <span className="text-gold"> ★</span>
+                  <span className="text-xs text-ink-faint font-normal">
+                    {" "}
+                    ({r.total_reviews})
+                  </span>
+                </span>
+              )}
+              {loadingId === r.id ? (
+                <Loader2 className="w-4 h-4 text-forest animate-spin shrink-0" />
+              ) : (
+                <ArrowRight className="w-4 h-4 text-ink-faint shrink-0" />
+              )}
             </button>
-            .
-          </p>
-        )}
-      </div>
+          ))}
+          {liveResults.length === 0 && !searching && (
+            <p className="text-center py-4 text-sm text-ink-faint">
+              No restaurants found for “{query}”.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Sample picker */}
+      {!liveMode && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {demoResults.map((place) => (
+            <button
+              key={place.id}
+              onClick={() => setSelected(place)}
+              className="text-left bg-paper rounded-2xl border border-line p-4 hover:border-forest/40 hover:shadow-sm transition-all group"
+            >
+              <p className="font-heading font-semibold text-ink text-[15px] leading-snug">
+                {place.name}
+              </p>
+              <p className="text-xs text-ink-faint mt-1 flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{place.address}</span>
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                <Stars rating={place.rating} />
+                <span className="text-sm font-semibold text-ink tabular-nums">
+                  {place.rating.toFixed(1)}
+                </span>
+                <span className="text-xs text-ink-faint">
+                  ({place.total_reviews})
+                </span>
+              </div>
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-forest opacity-0 group-hover:opacity-100 transition-opacity">
+                Preview <ArrowRight className="w-3 h-3" />
+              </span>
+            </button>
+          ))}
+          {demoResults.length === 0 && (
+            <p className="col-span-full text-center py-8 text-sm text-ink-faint">
+              No sample matches “{query}”. Try{" "}
+              <button
+                onClick={() => setQuery("")}
+                className="text-forest underline underline-offset-2"
+              >
+                clearing the search
+              </button>
+              .
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -204,6 +317,11 @@ function PlaceResult({
               <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em]">
                 A few of the {place.total_reviews} reviews
               </p>
+              {place.sample_reviews.length === 0 && (
+                <p className="text-sm text-ink-faint italic">
+                  Google returned no public review text for this listing.
+                </p>
+              )}
               {place.sample_reviews.map((r, i) => (
                 <div key={i} className="border-l-2 border-line pl-3">
                   <div className="flex items-center gap-2">
@@ -243,26 +361,45 @@ function PlaceResult({
             </span>
           </div>
 
-          {/* Blurred category breakdown */}
+          {/* Blurred category breakdown.
+              Samples carry illustrative scores; live places get neutral
+              placeholders — we never invent numbers for a real business. */}
           <div className="relative">
             <div className="p-5 space-y-3 blur-[3px] select-none pointer-events-none">
-              {place.locked_categories.map((c) => (
-                <div key={c.category} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink">
-                      {CATEGORY_LABELS[c.category]}
-                    </span>
-                    <span
-                      className="text-xs font-bold tabular-nums"
-                      style={{ color: scoreInk(c.score) }}
-                    >
-                      {fmtScore(c.score)}
-                    </span>
-                  </div>
-                  <ScoreBar score={c.score} />
-                  <p className="text-xs text-ink-faint">{c.label}</p>
-                </div>
-              ))}
+              {place.locked_categories
+                ? place.locked_categories.map((c) => (
+                    <div key={c.category} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-ink">
+                          {CATEGORY_LABELS[c.category]}
+                        </span>
+                        <span
+                          className="text-xs font-bold tabular-nums"
+                          style={{ color: scoreInk(c.score) }}
+                        >
+                          {fmtScore(c.score)}
+                        </span>
+                      </div>
+                      <ScoreBar score={c.score} />
+                      <p className="text-xs text-ink-faint">{c.label}</p>
+                    </div>
+                  ))
+                : CATEGORIES.map((cat) => (
+                    <div key={cat} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-ink">
+                          {CATEGORY_LABELS[cat]}
+                        </span>
+                        <span className="text-xs font-bold text-ink-faint">
+                          ?
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-line-soft rounded-full w-full" />
+                      <p className="text-xs text-ink-faint">
+                        Unlocks when your Business Profile is connected.
+                      </p>
+                    </div>
+                  ))}
             </div>
 
             {/* Unlock overlay */}

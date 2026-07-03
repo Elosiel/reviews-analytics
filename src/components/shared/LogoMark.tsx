@@ -1,19 +1,39 @@
 // RA brand mark — same artwork as src/app/icon.svg (the favicon).
-// Keep the two in sync if the logo changes.
+// Faithful trace of the original neon monogram: continuous arm→bowl→leg R,
+// crossbar-less A with a clipped left leg, angled end cuts, cyan glow.
+// Keep the two files in sync if the logo changes.
 export default function LogoMark({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 1700 1700"
+      viewBox="0 0 1800 1800"
       className={className}
       aria-hidden="true"
       focusable="false"
     >
-      <rect width="1700" height="1700" rx="340" fill="#020607" />
-      <g transform="translate(-250,-45)" fill="#4ce9f2">
-        <path d="M295 235 L960 235 A235 265 0 0 1 960 765 L860 765 L830 615 L960 615 A95 115 0 0 0 960 385 L390 385 Z" />
-        <path d="M833 647 L957 733 L567 1290 L365 1315 Z" />
-        <path d="M836 704 L984 676 L1151 1555 L998 1555 Z" />
-        <path d="M1098 1141 L1330 455 L1905 1555 L1745 1555 L1330 760 L1135 1336 Z" />
+      <defs>
+        <filter id="ra-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="30" />
+        </filter>
+        <g id="ra-glyph">
+          <path
+            d="M 300 232 L 855 232
+               C 1035 232 1140 330 1140 478
+               C 1140 650 1000 728 865 738
+               L 883 716 L 1150 1462 L 997 1497 L 720 685 L 795 608
+               C 930 590 1008 555 1008 466
+               C 1008 355 935 367 855 367
+               L 395 367 Z"
+          />
+          <path
+            d="M 1467 522 L 1958 1492 L 1800 1502 L 1472 770
+               L 1230 1120 L 1108 1042 Z"
+          />
+        </g>
+      </defs>
+      <rect width="1800" height="1800" rx="360" fill="#050a0b" />
+      <g transform="translate(-91,137) scale(0.88)">
+        <use href="#ra-glyph" fill="#2fd9e6" opacity="0.8" filter="url(#ra-glow)" />
+        <use href="#ra-glyph" fill="#49e8ef" />
       </g>
     </svg>
   );

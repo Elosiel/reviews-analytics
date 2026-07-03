@@ -37,10 +37,17 @@ export interface PreviewPlace {
   total_reviews: number;
   /** The ~3–5 reviews the Places API returns to anyone (the public sliver) */
   sample_reviews: PreviewReview[];
-  /** The full picture — locked until they connect Business Profile */
-  locked_categories: PreviewCategory[];
-  /** Headline insight, blurred in the UI as the hook */
-  locked_headline: string;
+  /**
+   * The full picture — locked until they connect Business Profile.
+   * Only present on SAMPLE restaurants: for live places we never invent
+   * scores for a real business, so the locked panel shows neutral
+   * placeholders instead.
+   */
+  locked_categories?: PreviewCategory[];
+  /** Headline insight, blurred in the UI as the hook (samples only) */
+  locked_headline?: string;
+  /** True when this came from the live Google Places API */
+  is_live?: boolean;
 }
 
 export const DEMO_PLACES: PreviewPlace[] = [
