@@ -27,7 +27,8 @@ export async function GET(request: Request) {
     body: JSON.stringify({
       textQuery: q,
       includedType: "restaurant",
-      maxResultCount: 10,
+      regionCode: "US",
+      maxResultCount: 20,
     }),
     // Public data; short cache keeps repeat keystrokes cheap
     next: { revalidate: 60 },
