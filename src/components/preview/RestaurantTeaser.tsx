@@ -28,6 +28,25 @@ interface LiveSearchResult {
   total_reviews: number;
 }
 
+const US_STATES = [
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"],
+  ["CA", "California"], ["CO", "Colorado"], ["CT", "Connecticut"],
+  ["DE", "Delaware"], ["DC", "Washington DC"], ["FL", "Florida"],
+  ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"],
+  ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"],
+  ["LA", "Louisiana"], ["ME", "Maine"], ["MD", "Maryland"],
+  ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"],
+  ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"],
+  ["NE", "Nebraska"], ["NV", "Nevada"], ["NH", "New Hampshire"],
+  ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"],
+  ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"],
+  ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"],
+  ["RI", "Rhode Island"], ["SC", "South Carolina"], ["SD", "South Dakota"],
+  ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"],
+  ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"],
+  ["WI", "Wisconsin"], ["WY", "Wyoming"],
+] as const;
+
 function Stars({ rating, className }: { rating: number; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-0.5", className)}>
@@ -65,7 +84,8 @@ function ScoreBar({ score }: { score: number }) {
 
 export default function RestaurantTeaser() {
   const [query, setQuery] = useState("");
-  const [locationQuery, setLocationQuery] = useState("");
+  const [city, setCity] = useState("");
+  const [stateCode, setStateCode] = useState("");
   const [selected, setSelected] = useState<PreviewPlace | null>(null);
   const [liveResults, setLiveResults] = useState<LiveSearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -83,9 +103,11 @@ export default function RestaurantTeaser() {
   }, []);
 
   // Live search against Google Places, debounced. Demo mode when no key.
-  // The optional location field is appended to the text query — Google's
-  // Text Search parses "name city/state/zip" natively, no dropdowns needed.
-  function scheduleSearch(name: string, loc: string) {
+  // City/state are appended to the text query — Google's Text Search
+  // parses "name, city, state" natively. Name-only searches come back
+  // alphabetical so chains read like a directory instead of Google's
+  // relevance guess.
+  function scheduleSearch(name: string, cityVal: string, stateVal: string) {
     if (!HAS_MAPS_KEY) return;
     if (debounce.current) clearTimeout(debounce.current);
     const q = name.trim();
@@ -94,13 +116,26 @@ export default function RestaurantTeaser() {
       setSearching(false);
       return;
     }
-    const full = loc.trim() ? `${q} ${loc.trim()}` : q;
+    const stateName = US_STATES.find(([code]) => code === stateVal)?.[1] ?? "";
+    const full = [q, cityVal.trim(), stateName].filter(Boolean).join(", ");
+    const nameOnly = !cityVal.trim() && !stateVal;
     setSearching(true);
     debounce.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/places/search?q=${encodeURIComponent(full)}`);
         const data = await res.json();
-        setLiveResults(Array.isArray(data.places) ? data.places : []);
+        let places: LiveSearchResult[] = Array.isArray(data.places)
+          ? data.places
+          : [];
+        if (nameOnly) {
+          places = places
+            .slice()
+            .sort(
+              (a, b) =>
+                a.name.localeCompare(b.name) || a.address.localeCompare(b.address)
+            );
+        }
+        setLiveResults(places);
       } catch {
         setLiveResults([]);
       } finally {
@@ -111,12 +146,17 @@ export default function RestaurantTeaser() {
 
   function handleQueryChange(value: string) {
     setQuery(value);
-    scheduleSearch(value, locationQuery);
+    scheduleSearch(value, city, stateCode);
   }
 
-  function handleLocationChange(value: string) {
-    setLocationQuery(value);
-    scheduleSearch(query, value);
+  function handleCityChange(value: string) {
+    setCity(value);
+    scheduleSearch(query, value, stateCode);
+  }
+
+  function handleStateChange(value: string) {
+    setStateCode(value);
+    scheduleSearch(query, city, value);
   }
 
   async function selectLive(result: LiveSearchResult) {
@@ -157,22 +197,39 @@ export default function RestaurantTeaser() {
           />
         </div>
         {HAS_MAPS_KEY && (
-          <div className="relative sm:w-64">
-            <MapPin className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={locationQuery}
-              onChange={(e) => handleLocationChange(e.target.value)}
-              placeholder="City, state, or ZIP"
-              className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
-            />
-          </div>
+          <>
+            <div className="relative sm:w-44">
+              <MapPin className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={city}
+                onChange={(e) => handleCityChange(e.target.value)}
+                placeholder="City"
+                className="w-full rounded-2xl border border-line bg-paper pl-11 pr-4 py-3.5 text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm"
+              />
+            </div>
+            <select
+              value={stateCode}
+              onChange={(e) => handleStateChange(e.target.value)}
+              className={cn(
+                "sm:w-44 rounded-2xl border border-line bg-paper px-4 py-3.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm appearance-none cursor-pointer",
+                stateCode ? "text-ink" : "text-ink-faint"
+              )}
+            >
+              <option value="">All states</option>
+              {US_STATES.map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </>
         )}
       </div>
 
       <p className="text-xs text-ink-faint text-center">
         {HAS_MAPS_KEY
-          ? "Search any restaurant — add a city to narrow it down. Or start from a sample below."
+          ? "Type the name, then narrow by city or state. Name-only searches list A–Z."
           : "Preview uses sample restaurants. Once your Business Profile is connected, this reads your real reviews."}
       </p>
 
@@ -327,7 +384,7 @@ function PlaceResult({
 
             <div className="mt-4 space-y-3">
               <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em]">
-                A few of the {place.total_reviews} reviews
+                The newest of the {place.total_reviews} reviews
               </p>
               {place.sample_reviews.length === 0 && (
                 <p className="text-sm text-ink-faint italic">
