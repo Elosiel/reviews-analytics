@@ -1,15 +1,65 @@
 import { FileText, Link2, Sparkles } from "lucide-react";
-import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
+import { createClient } from "@/lib/supabase/server";
+import RestaurantProfileForm, {
+  EMPTY_PROFILE,
+} from "@/components/shared/RestaurantProfileForm";
 import RestaurantDocuments from "@/components/shared/RestaurantDocuments";
 import RestaurantLinks from "@/components/shared/RestaurantLinks";
+import type { RestaurantProfile, TenantDocument } from "@/types";
 
 /**
  * "Your restaurant" — the single place the owner teaches the AI who they
  * are: profile answers, website links, and uploaded documents (menus,
- * promotions, wine lists). Everything here sharpens recommendations
- * today and gives any future capabilities the restaurant's own voice.
+ * promotions, wine lists). Everything here is read from / written to
+ * Supabase (tenant_profiles + tenant_documents + Storage), RLS-scoped to
+ * the tenant, so it persists across devices and sessions.
  */
-export default function RestaurantPage() {
+export default async function RestaurantPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("tenant_id")
+    .eq("id", user!.id)
+    .single();
+  const tenantId: string | null = profileRow?.tenant_id ?? null;
+
+  const { data: ctx } = tenantId
+    ? await supabase
+        .from("tenant_profiles")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: docRows } = tenantId
+    ? await supabase
+        .from("tenant_documents")
+        .select(
+          "id, kind, title, file_name, mime_type, size_bytes, storage_path, status, uploaded_at"
+        )
+        .eq("tenant_id", tenantId)
+        .order("uploaded_at", { ascending: false })
+    : { data: null };
+
+  const profile: RestaurantProfile = ctx
+    ? {
+        mission: ctx.mission ?? "",
+        cuisine_style: ctx.cuisine_style ?? "",
+        target_guests: ctx.target_guests ?? "",
+        price_point: ctx.price_point ?? "$$",
+        goals: ctx.goals ?? "",
+        notes: ctx.notes ?? "",
+        website_url: ctx.website_url ?? "",
+        menu_url: ctx.menu_url ?? "",
+      }
+    : EMPTY_PROFILE;
+
+  const documents = (docRows ?? []) as TenantDocument[];
+
   return (
     <div className="px-6 py-10 max-w-3xl mx-auto space-y-7">
       {/* ── Editorial header ── */}
@@ -44,7 +94,10 @@ export default function RestaurantPage() {
           </p>
         </div>
         <div className="px-6 py-5">
-          <RestaurantLinks />
+          <RestaurantLinks
+            initialWebsite={profile.website_url}
+            initialMenu={profile.menu_url}
+          />
         </div>
       </div>
 
@@ -65,7 +118,7 @@ export default function RestaurantPage() {
           </p>
         </div>
         <div className="px-6 py-5">
-          <RestaurantDocuments />
+          <RestaurantDocuments tenantId={tenantId} initialDocuments={documents} />
         </div>
       </div>
 
@@ -84,7 +137,7 @@ export default function RestaurantPage() {
           </p>
         </div>
         <div className="px-6 py-5">
-          <RestaurantProfileForm />
+          <RestaurantProfileForm initialProfile={profile} />
         </div>
       </div>
     </div>

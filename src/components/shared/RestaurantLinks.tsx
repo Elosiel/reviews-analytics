@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, ExternalLink, Globe, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { loadProfile } from "@/components/shared/RestaurantProfileForm";
+import { createClient } from "@/lib/supabase/client";
+import { currentTenantId } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
-
-const STORAGE_KEY = "ra_restaurant_profile";
 
 /** "marisolmiami.com" → "https://marisolmiami.com"; leaves valid URLs alone. */
 function normalizeUrl(raw: string): string {
@@ -33,47 +32,63 @@ function domainOf(url: string): string {
   }
 }
 
+interface RestaurantLinksProps {
+  initialWebsite?: string;
+  initialMenu?: string;
+}
+
 /**
  * Where the AI learns your public face — the website (voice, story, hours)
- * and the online menu (dish names, prices). Saved onto the restaurant
- * profile; maps to tenant_profiles.website_url / menu_url.
+ * and the online menu (dish names, prices). Persisted onto
+ * tenant_profiles.website_url / menu_url (RLS-scoped to the tenant).
  */
-export default function RestaurantLinks() {
-  const [website, setWebsite] = useState("");
-  const [menu, setMenu] = useState("");
+export default function RestaurantLinks({
+  initialWebsite = "",
+  initialMenu = "",
+}: RestaurantLinksProps) {
+  const [website, setWebsite] = useState(initialWebsite);
+  const [menu, setMenu] = useState(initialMenu);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      const p = loadProfile();
-      setWebsite(p.website_url ?? "");
-      setMenu(p.menu_url ?? "");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [error, setError] = useState<string | null>(null);
 
   const websiteOk = isValidUrl(website);
   const menuOk = isValidUrl(menu);
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!websiteOk || !menuOk) return;
-    const next = {
-      ...loadProfile(),
-      website_url: normalizeUrl(website),
-      menu_url: normalizeUrl(menu),
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    setWebsite(next.website_url);
-    setMenu(next.menu_url);
-    setSaved(true);
-    setTouched(false);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    setError(null);
+    try {
+      const tenantId = await currentTenantId();
+      if (!tenantId) throw new Error("no-tenant");
+      const nextWebsite = normalizeUrl(website);
+      const nextMenu = normalizeUrl(menu);
+      const supabase = createClient();
+      // Only the link columns — the profile form owns the rest, so they
+      // stay untouched on conflict.
+      const { error: dbError } = await supabase.from("tenant_profiles").upsert(
+        {
+          tenant_id: tenantId,
+          website_url: nextWebsite,
+          menu_url: nextMenu,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "tenant_id" }
+      );
+      if (dbError) throw dbError;
+      setWebsite(nextWebsite);
+      setMenu(nextMenu);
+      setSaved(true);
+      setTouched(false);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setError("Couldn't save just now — please try again in a moment.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const fieldClass =
@@ -155,15 +170,20 @@ export default function RestaurantLinks() {
       <div className="flex items-center gap-3">
         <Button
           type="submit"
-          disabled={!websiteOk || !menuOk || !touched}
+          disabled={!websiteOk || !menuOk || !touched || saving}
           className="bg-forest hover:bg-forest-soft text-paper h-10 px-6 disabled:opacity-50"
         >
-          Save links
+          {saving ? "Saving…" : "Save links"}
         </Button>
         {saved && (
           <span className="flex items-center gap-1.5 text-sm text-pos font-medium">
             <Check className="w-4 h-4" />
             Saved — the AI will read these
+          </span>
+        )}
+        {error && (
+          <span className="text-sm text-neg font-medium" role="alert">
+            {error}
           </span>
         )}
       </div>

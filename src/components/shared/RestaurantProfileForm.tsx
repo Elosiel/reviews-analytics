@@ -1,26 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RestaurantProfile } from "@/types";
-import { MOCK_PROFILE } from "@/lib/mock-data";
+import { createClient } from "@/lib/supabase/client";
+import { currentTenantId } from "@/lib/tenant";
 import { cn } from "@/lib/utils";
 
-const STORAGE_KEY = "ra_restaurant_profile";
 const PRICE_POINTS: RestaurantProfile["price_point"][] = ["$", "$$", "$$$", "$$$$"];
 
-export function loadProfile(): RestaurantProfile {
-  if (typeof window === "undefined") return MOCK_PROFILE;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...MOCK_PROFILE, ...JSON.parse(raw) } : MOCK_PROFILE;
-  } catch {
-    return MOCK_PROFILE;
-  }
-}
+// A fresh tenant starts blank — no demo prefill on a page a real owner fills in.
+export const EMPTY_PROFILE: RestaurantProfile = {
+  mission: "",
+  cuisine_style: "",
+  target_guests: "",
+  price_point: "$$",
+  goals: "",
+  notes: "",
+  website_url: "",
+  menu_url: "",
+};
 
 interface RestaurantProfileFormProps {
+  /** Server-loaded profile for this tenant (no flash). Falls back to blank. */
+  initialProfile?: RestaurantProfile;
   /** Compact spacing for the onboarding step */
   compact?: boolean;
   submitLabel?: string;
@@ -30,28 +34,20 @@ interface RestaurantProfileFormProps {
 /**
  * The questions that teach the AI who this restaurant is. Every
  * recommendation on the dashboard is written against these answers.
- * Stored locally for the demo; maps 1:1 to the tenant_profiles table
- * once the live pipeline is wired.
+ * Persisted to the tenant_profiles table (RLS-scoped to the tenant).
  */
 export default function RestaurantProfileForm({
+  initialProfile,
   compact = false,
   submitLabel = "Save profile",
   onSaved,
 }: RestaurantProfileFormProps) {
-  const [profile, setProfile] = useState<RestaurantProfile>(MOCK_PROFILE);
+  const [profile, setProfile] = useState<RestaurantProfile>(
+    initialProfile ?? EMPTY_PROFILE
+  );
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    // Async so SSR markup matches the first client render, then the
-    // saved profile (if any) loads from localStorage
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setProfile(loadProfile());
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function set<K extends keyof RestaurantProfile>(
     key: K,
@@ -61,12 +57,38 @@ export default function RestaurantProfileForm({
     setSaved(false);
   }
 
-  function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-    setSaved(true);
-    onSaved?.(profile);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    setError(null);
+    try {
+      const tenantId = await currentTenantId();
+      if (!tenantId) throw new Error("no-tenant");
+      const supabase = createClient();
+      // Only the profile columns — website_url / menu_url are owned by the
+      // links form, so we leave them untouched on conflict.
+      const { error: dbError } = await supabase.from("tenant_profiles").upsert(
+        {
+          tenant_id: tenantId,
+          mission: profile.mission,
+          cuisine_style: profile.cuisine_style,
+          target_guests: profile.target_guests,
+          price_point: profile.price_point,
+          goals: profile.goals,
+          notes: profile.notes,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "tenant_id" }
+      );
+      if (dbError) throw dbError;
+      setSaved(true);
+      onSaved?.(profile);
+      setTimeout(() => setSaved(false), 2500);
+    } catch {
+      setError("Couldn't save just now — please try again in a moment.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const fieldClass =
@@ -203,14 +225,20 @@ export default function RestaurantProfileForm({
       <div className="flex items-center gap-3">
         <Button
           type="submit"
-          className="bg-forest hover:bg-forest-soft text-paper h-10 px-6"
+          disabled={saving}
+          className="bg-forest hover:bg-forest-soft text-paper h-10 px-6 disabled:opacity-50"
         >
-          {submitLabel}
+          {saving ? "Saving…" : submitLabel}
         </Button>
         {saved && (
           <span className="flex items-center gap-1.5 text-sm text-pos font-medium">
             <Check className="w-4 h-4" />
             Saved — recommendations will use this
+          </span>
+        )}
+        {error && (
+          <span className="text-sm text-neg font-medium" role="alert">
+            {error}
           </span>
         )}
       </div>
