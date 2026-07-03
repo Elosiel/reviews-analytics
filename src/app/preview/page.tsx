@@ -57,8 +57,7 @@ export default function PreviewPage() {
         {/* Reassurance footer */}
         <div className="max-w-2xl mx-auto text-center pt-6 border-t border-line-soft">
           <p className="text-sm text-ink-soft">
-            Built for multi-location restaurant groups. Read-only by design —
-            we never post, reply, or change anything on your listing.
+            Built for multi-location restaurant groups.
           </p>
           <Link
             href="/login"
