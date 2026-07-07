@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   Reply,
   UtensilsCrossed,
+  ClipboardList,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,6 +32,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/locations", label: "Locations", icon: MapPin },
+  { href: "/dashboard/sops", label: "SOPs", icon: ClipboardList },
+  { href: "/dashboard/meetings", label: "Meetings", icon: Users },
   { href: "/dashboard/restaurant", label: "Your restaurant", icon: UtensilsCrossed },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

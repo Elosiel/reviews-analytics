@@ -130,6 +130,44 @@ export interface DriftAlert {
   recovered_at: string | null;
 }
 
+// ── SOPs (Standard Operating Procedures) ─────────────────────────
+// Brand-wide, one per category (unique per tenant+category while active).
+// AI drafts a suggestion off a recurring drift alert; a manager reviews,
+// edits, and activates it — RAAI never auto-publishes or silently
+// rewrites an SOP a team is expected to follow.
+export type SopStatus = "draft" | "active" | "archived";
+
+export interface Sop {
+  id: string;
+  tenant_id: string;
+  category: SentimentCategory;
+  title: string;
+  content: string;
+  status: SopStatus;
+  ai_generated: boolean;
+  source_summary: string | null;
+  source_drift_alert_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  activated_at: string | null;
+}
+
+// Evidence quote backing an SOP draft. quote_text is null after
+// content_purge_at (copied from the source review — not a fresh timer).
+export interface SopEvidenceQuote {
+  id: string;
+  tenant_id: string;
+  sop_id: string;
+  review_id: string | null;
+  location_id: string | null;
+  location_name: string;
+  quote_text: string | null;
+  star_rating: number | null;
+  reviewed_at: string | null;
+  content_purge_at: string;
+}
+
 // ── Dashboard data shapes (composed from rollups + alerts) ───────
 
 // Ranked to-do list item — the literal product output
@@ -210,6 +248,61 @@ export interface ShiftMeetingCard {
   generated_at: string;
   // Only quotes from within the 30-day compliant window
   evidence_quotes: { text: string; star_rating: number; reviewed_at: string }[];
+}
+
+// ── Meetings ──────────────────────────────────────────────────────
+// On-demand, manager-generated agendas built from filtered review
+// trends — the tab that turns "read hundreds of reviews" into a
+// ready-made agenda. Saved to a filterable history (location, city,
+// date, category).
+export interface MeetingFilters {
+  location_ids: string[] | null;  // null = all locations
+  city: string | null;            // null = all cities
+  categories: SentimentCategory[] | null; // null = all categories
+  date_start: string;              // date
+  date_end: string;                // date
+}
+
+// One discussion item on a meeting's agenda — the paraphrased analysis
+// half of the record (retained indefinitely). Verbatim evidence lives
+// separately in MeetingQuoteSnapshot so it can carry its own purge clock.
+export interface MeetingAgendaIssue {
+  category: SentimentCategory;
+  location_id: string;
+  location_name: string;
+  mention_count: number;
+  avg_sentiment_score: number;
+  sentiment_delta: number | null;
+  severity: AlertSeverity | null;
+  discussion_point: string;   // what to raise with the team, in plain language
+  suggested_action: string;   // the concrete step to leave the meeting with
+  linked_sop_id?: string;     // active SOP for this category, if one exists
+}
+
+export interface Meeting {
+  id: string;
+  tenant_id: string;
+  title: string;
+  filters: MeetingFilters;
+  agenda: MeetingAgendaIssue[];
+  generated_at: string;
+  created_by: string | null;
+}
+
+// Evidence quote backing a meeting's agenda. quote_text is null after
+// content_purge_at (copied from the source review — not a fresh timer).
+export interface MeetingQuoteSnapshot {
+  id: string;
+  tenant_id: string;
+  meeting_id: string;
+  review_id: string | null;
+  location_id: string | null;
+  location_name: string;
+  category: SentimentCategory;
+  quote_text: string | null;
+  star_rating: number | null;
+  reviewed_at: string | null;
+  content_purge_at: string;
 }
 
 // ── API shapes ────────────────────────────────────────────────────
