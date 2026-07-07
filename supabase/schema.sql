@@ -300,6 +300,119 @@ create table public.drift_alerts (
 );
 
 -- ─────────────────────────────────────────────────────────────────
+-- SOPs (Standard Operating Procedures)
+--
+-- Brand-wide, one per category — matches how restaurant groups actually
+-- standardize operations (the moat is cross-location comparison, not
+-- per-location documents). AI drafts a suggestion when a category shows
+-- sustained negative drift (an unresolved drift_alert with no active SOP
+-- yet); a manager reviews, edits, and activates it. RAAI never auto-
+-- publishes or silently updates an SOP a team is expected to follow.
+--
+-- Evidence quotes live in a separate snapshot table so they can carry
+-- their own 30-day purge clock inherited from the source review — the
+-- SOP's own title/content is the tenant's derived work product and is
+-- retained indefinitely, same split as everywhere else in this schema.
+-- ─────────────────────────────────────────────────────────────────
+
+create table public.sops (
+  id                     uuid primary key default uuid_generate_v4(),
+  tenant_id              uuid not null,
+  category               text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
+  title                  text not null,
+  content                text not null,
+  status                 text not null default 'draft' check (status in ('draft','active','archived')),
+  ai_generated           boolean not null default true,
+  -- What triggered the draft, e.g. "Drafted from a high drift alert at
+  -- Wynwood — service down 0.31 over 30 days."
+  source_summary         text,
+  source_drift_alert_id  uuid references public.drift_alerts(id) on delete set null,
+  created_by             uuid references public.profiles(id) on delete set null,
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now(),
+  activated_at           timestamptz
+);
+
+-- Only one active SOP per category per tenant — a brand-wide standard,
+-- not a per-location document. Drafts/archived copies can coexist.
+create unique index sops_one_active_per_category
+  on public.sops (tenant_id, category)
+  where (status = 'active');
+
+create index sops_tenant_idx on public.sops (tenant_id, category);
+
+-- Evidence quotes backing an SOP draft. content_purge_at is copied from
+-- the source review at insert time (NOT a fresh 30-day timer) — a quote
+-- disappears exactly when the review it came from would have. The daily
+-- purge job below nulls quote_text here the same way it nulls
+-- reviews.review_text.
+create table public.sop_evidence_quotes (
+  id                uuid primary key default uuid_generate_v4(),
+  tenant_id         uuid not null,
+  sop_id            uuid references public.sops(id) on delete cascade not null,
+  review_id         uuid references public.reviews(id) on delete set null,
+  location_id       uuid references public.locations(id) on delete set null,
+  location_name     text not null,
+  quote_text        text,              -- nulled at content_purge_at
+  star_rating       int,
+  reviewed_at       timestamptz,
+  content_purge_at  timestamptz not null
+);
+
+create index sop_evidence_quotes_sop_idx on public.sop_evidence_quotes (sop_id);
+
+-- ─────────────────────────────────────────────────────────────────
+-- MEETINGS
+--
+-- On-demand, manager-generated agendas: pick location(s)/city/date range/
+-- category filters, RAAI builds discussion points + suggested actions
+-- from category_rollups and ranked issues, and saves it to a filterable
+-- history. No auto-weekly generation in v1 — the manager controls timing
+-- around their actual meeting schedule, and Claude spend stays predictable.
+-- ─────────────────────────────────────────────────────────────────
+
+create table public.meetings (
+  id            uuid primary key default uuid_generate_v4(),
+  tenant_id     uuid not null,
+  title         text not null,
+  -- Filters used to generate this meeting — null/empty means "all"
+  location_ids  uuid[],
+  city          text,
+  categories    text[],
+  date_start    date not null,
+  date_end      date not null,
+  -- Discussion points + suggested actions, keyed by category/location —
+  -- paraphrased analysis only, no verbatim text (that lives in
+  -- meeting_quote_snapshots below). Retained indefinitely, same as
+  -- category_rollups.
+  agenda        jsonb not null default '[]'::jsonb,
+  generated_at  timestamptz not null default now(),
+  created_by    uuid references public.profiles(id) on delete set null
+);
+
+create index meetings_tenant_idx on public.meetings (tenant_id, generated_at desc);
+
+-- Evidence quotes backing a meeting's agenda — same purge semantics as
+-- sop_evidence_quotes: content_purge_at is copied from the source review,
+-- not reset, so a quote leaves the meeting record on the same schedule it
+-- would have left the reviews table.
+create table public.meeting_quote_snapshots (
+  id                uuid primary key default uuid_generate_v4(),
+  tenant_id         uuid not null,
+  meeting_id        uuid references public.meetings(id) on delete cascade not null,
+  review_id         uuid references public.reviews(id) on delete set null,
+  location_id       uuid references public.locations(id) on delete set null,
+  location_name     text not null,
+  category          text not null check (category in ('food','service','atmosphere','value','wait_time','cleanliness')),
+  quote_text        text,              -- nulled at content_purge_at
+  star_rating       int,
+  reviewed_at       timestamptz,
+  content_purge_at  timestamptz not null
+);
+
+create index meeting_quote_snapshots_meeting_idx on public.meeting_quote_snapshots (meeting_id);
+
+-- ─────────────────────────────────────────────────────────────────
 -- WEEKLY DIGEST LOG
 -- ─────────────────────────────────────────────────────────────────
 
@@ -325,6 +438,10 @@ alter table public.review_categories enable row level security;
 alter table public.category_rollups  enable row level security;
 alter table public.drift_alerts      enable row level security;
 alter table public.digest_log        enable row level security;
+alter table public.sops                    enable row level security;
+alter table public.sop_evidence_quotes     enable row level security;
+alter table public.meetings                enable row level security;
+alter table public.meeting_quote_snapshots enable row level security;
 
 -- RLS helper: current tenant from session variable (set by app, never from request params)
 create or replace function public.current_tenant_id()
@@ -345,6 +462,10 @@ create policy "tenant isolation" on public.review_categories for all using (tena
 create policy "tenant isolation" on public.category_rollups  for all using (tenant_id = public.current_tenant_id());
 create policy "tenant isolation" on public.drift_alerts      for all using (tenant_id = public.current_tenant_id());
 create policy "tenant isolation" on public.digest_log        for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.sops                    for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.sop_evidence_quotes     for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.meetings                for all using (tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.meeting_quote_snapshots for all using (tenant_id = public.current_tenant_id());
 
 -- ─────────────────────────────────────────────────────────────────
 -- TRIGGERS & AUTO-JOBS
@@ -372,6 +493,10 @@ create trigger on_auth_user_created
 -- 30-day text purge job (runs daily at 03:00 UTC)
 -- Nulls review_text and reviewer_name when content_purge_at is past.
 -- Derived data (category scores, star_rating, dates) is NEVER deleted.
+-- Also nulls quote_text in the SOP/Meeting evidence snapshot tables —
+-- those quotes carry the source review's own content_purge_at, so they
+-- leave saved SOPs/meeting notes on the same 30-day clock as the review
+-- they were copied from. The SOP/meeting record itself is untouched.
 select cron.schedule(
   'purge-review-text',
   '0 3 * * *',
@@ -380,6 +505,16 @@ select cron.schedule(
     set review_text = null, reviewer_name = null
     where content_purge_at <= now()
       and (review_text is not null or reviewer_name is not null);
+
+    update public.sop_evidence_quotes
+    set quote_text = null
+    where content_purge_at <= now()
+      and quote_text is not null;
+
+    update public.meeting_quote_snapshots
+    set quote_text = null
+    where content_purge_at <= now()
+      and quote_text is not null;
   $$
 );
 

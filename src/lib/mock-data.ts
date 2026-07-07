@@ -14,6 +14,9 @@ import type {
   Location,
   RestaurantProfile,
   SentimentCategory,
+  Sop,
+  Meeting,
+  MeetingQuoteSnapshot,
 } from "@/types";
 
 // ── Restaurant profile (collected at onboarding, editable in Settings) ──
@@ -361,3 +364,210 @@ export function mockGroupTrend() {
     return { week, score: Math.round(score * 100) / 100 };
   });
 }
+
+// ── SOPs — one per category, brand-wide across the group ─────────
+// The food SOP is already active and is what actually drove
+// MOCK_RECOVERY (Downtown's cold-food complaints turning around) —
+// proof the loop works. The service and wait_time SOPs are AI drafts
+// awaiting manager approval, drafted straight from MOCK_DRIFT_ALERTS.
+export const MOCK_SOPS: Sop[] = [
+  {
+    id: "sop-1",
+    tenant_id: "tenant-1",
+    category: "food",
+    title: "Hot-Plate Pass Standard",
+    status: "active",
+    ai_generated: true,
+    content:
+      "PURPOSE: Guests kept saying plates arrived cold — that's a pass-timing problem, not a recipe problem.\nSTANDARD: 1) Expo confirms every hot dish leaves the pass on a heated plate, no exceptions. 2) No plate sits on the pass longer than 90 seconds before runner pickup. 3) Runners announce table number before touching a plate, so expo can flag anything stalling. 4) Friday/Saturday peak gets a dedicated expo, not a shared role. 5) Manager spot-checks plate temperature at the table during Friday service.\nHOW WE'LL KNOW IT'S WORKING: Food sentiment at the flagged location trending back above 0 within four weeks.",
+    source_summary:
+      "Drafted from a medium drift alert at Downtown Miami — food down 0.24 over 30 days.",
+    source_drift_alert_id: "alert-0",
+    created_by: "user-1",
+    created_at: "2026-05-15T14:00:00Z",
+    updated_at: "2026-06-23T09:00:00Z",
+    activated_at: "2026-05-20T09:00:00Z",
+  },
+  {
+    id: "sop-2",
+    tenant_id: "tenant-1",
+    category: "service",
+    title: "Table Greeting & Wait-Time Standard",
+    status: "draft",
+    ai_generated: true,
+    content:
+      "PURPOSE: Guests at Wynwood are waiting too long to be acknowledged, and staff attentiveness is the top complaint driving the drop.\nSTANDARD: 1) Every table gets a verbal greeting within 90 seconds of being seated, even if it's just a server passing by. 2) Orders are read back to the table before leaving to confirm accuracy. 3) A floor lead is scheduled on Friday and Saturday nights specifically to catch tables slipping through the cracks. 4) Pre-shift huddle includes a 2-minute greet drill on busy nights. 5) If a table waits past the 90-second mark, any staff member — not just their assigned server — greets them.\nHOW WE'LL KNOW IT'S WORKING: Service mentions at Wynwood easing back toward flat within two weeks of rollout.",
+    source_summary:
+      "Drafted from a high drift alert at Wynwood — service down 0.31 over 30 days.",
+    source_drift_alert_id: "alert-1",
+    created_by: null,
+    created_at: "2026-07-05T10:00:00Z",
+    updated_at: "2026-07-05T10:00:00Z",
+    activated_at: null,
+  },
+  {
+    id: "sop-3",
+    tenant_id: "tenant-1",
+    category: "wait_time",
+    title: "Reservation & Table-Matrix Standard",
+    status: "draft",
+    ai_generated: true,
+    content:
+      "PURPOSE: Reservation waits are increasing at Downtown even with tables held, which points at the booking matrix rather than true demand.\nSTANDARD: 1) No double-seating the 7–8pm slot without host-stand sign-off. 2) Walk-ins are quoted an honest wait, updated every 15 minutes if it shifts. 3) Host stand reviews Friday's book against last week's actual turn times before doors open. 4) Any reservation waiting past 15 minutes gets a manager check-in at the table, not just an apology at seating.\nHOW WE'LL KNOW IT'S WORKING: Wait-time mentions at Downtown flattening out over the next 30-day window.",
+    source_summary:
+      "Drafted from a medium drift alert at Downtown Miami — wait_time down 0.22 over 30 days.",
+    source_drift_alert_id: "alert-2",
+    created_by: null,
+    created_at: "2026-07-02T10:00:00Z",
+    updated_at: "2026-07-02T10:00:00Z",
+    activated_at: null,
+  },
+];
+
+// Evidence quotes behind each draft — display-only in the demo; in
+// production these come from sop_evidence_quotes and carry the source
+// review's own content_purge_at (nulled by the same daily job as
+// reviews.review_text, not a fresh 30-day timer).
+export const MOCK_SOP_EVIDENCE: Record<
+  string,
+  { location_name: string; quote: string }[]
+> = {
+  "sop-2": [
+    { location_name: "Wynwood", quote: "Server forgot our order twice and never apologized." },
+    { location_name: "Wynwood", quote: "Waited 20 minutes before anyone acknowledged us." },
+    { location_name: "Wynwood", quote: "Staff seemed overwhelmed and inattentive all night." },
+  ],
+  "sop-3": [
+    { location_name: "Downtown Miami", quote: "45-minute wait for a table with a reservation." },
+    { location_name: "Downtown Miami", quote: "Food took forever to come out even when the place was half empty." },
+  ],
+};
+
+// ── Meetings — on-demand agendas saved to history ─────────────────
+// Discussion points + suggested actions are deliberately worded
+// differently from MOCK_RANKED_ISSUES' recommendations — a meeting
+// agenda is what you say out loud to the team, not the written advice.
+export const MOCK_MEETINGS: Meeting[] = [
+  {
+    id: "meeting-1",
+    tenant_id: "tenant-1",
+    title: "All locations · Jun 30 to Jul 6, 2026",
+    filters: {
+      location_ids: null,
+      city: null,
+      categories: null,
+      date_start: "2026-06-30",
+      date_end: "2026-07-06",
+    },
+    agenda: [
+      {
+        category: "service",
+        location_id: "loc-2",
+        location_name: "Wynwood",
+        mention_count: 34,
+        avg_sentiment_score: -0.72,
+        sentiment_delta: -0.31,
+        severity: "high",
+        discussion_point:
+          "Wynwood guests are waiting too long to even be greeted, and it's the single biggest driver of this week's negative mentions.",
+        suggested_action:
+          "Roll out the greet-within-90-seconds standard starting this weekend and put a floor lead on both Friday and Saturday.",
+        linked_sop_id: "sop-2",
+      },
+      {
+        category: "wait_time",
+        location_id: "loc-1",
+        location_name: "Downtown Miami",
+        mention_count: 28,
+        avg_sentiment_score: -0.58,
+        sentiment_delta: -0.22,
+        severity: "medium",
+        discussion_point:
+          "Downtown reservation waits keep coming up — guests feel like their booking didn't matter.",
+        suggested_action:
+          "Have the host stand audit Friday's book against real turn times before doors open this week.",
+        linked_sop_id: "sop-3",
+      },
+      {
+        category: "food",
+        location_id: "loc-2",
+        location_name: "Wynwood",
+        mention_count: 21,
+        avg_sentiment_score: -0.44,
+        sentiment_delta: -0.18,
+        severity: "medium",
+        discussion_point:
+          "Cold plates and shrinking portions are being mentioned together at Wynwood — worth checking if it's an expo timing issue like Downtown had.",
+        suggested_action:
+          "Borrow Downtown's hot-plate pass standard for Wynwood's peak nights before considering any menu changes.",
+        linked_sop_id: "sop-1",
+      },
+    ],
+    generated_at: "2026-07-06T15:30:00Z",
+    created_by: "user-1",
+  },
+  {
+    id: "meeting-2",
+    tenant_id: "tenant-1",
+    title: "Wynwood · Jun 23 to Jun 29, 2026",
+    filters: {
+      location_ids: ["loc-2"],
+      city: null,
+      categories: ["service", "food"],
+      date_start: "2026-06-23",
+      date_end: "2026-06-29",
+    },
+    agenda: [
+      {
+        category: "service",
+        location_id: "loc-2",
+        location_name: "Wynwood",
+        mention_count: 19,
+        avg_sentiment_score: -0.68,
+        sentiment_delta: -0.24,
+        severity: "high",
+        discussion_point:
+          "Same greet-time complaints as last week at Wynwood — this hasn't turned around yet.",
+        suggested_action:
+          "Confirm the floor lead schedule actually happened last weekend before adding anything new.",
+        linked_sop_id: "sop-2",
+      },
+    ],
+    generated_at: "2026-06-29T16:00:00Z",
+    created_by: "user-1",
+  },
+];
+
+// Evidence quotes behind each saved meeting's agenda — same purge
+// semantics as MOCK_SOP_EVIDENCE; keyed here by meeting id for the
+// demo's print/copy view.
+export const MOCK_MEETING_QUOTES: Record<string, MeetingQuoteSnapshot[]> = {
+  "meeting-1": [
+    {
+      id: "mq-1", tenant_id: "tenant-1", meeting_id: "meeting-1",
+      review_id: "rev-1", location_id: "loc-2", location_name: "Wynwood",
+      category: "service", quote_text: "Server forgot our order twice and never apologized.",
+      star_rating: 2, reviewed_at: "2026-07-01T20:00:00Z", content_purge_at: "2026-07-31T20:00:00Z",
+    },
+    {
+      id: "mq-2", tenant_id: "tenant-1", meeting_id: "meeting-1",
+      review_id: "rev-2", location_id: "loc-1", location_name: "Downtown Miami",
+      category: "wait_time", quote_text: "45-minute wait for a table with a reservation.",
+      star_rating: 2, reviewed_at: "2026-07-02T19:30:00Z", content_purge_at: "2026-08-01T19:30:00Z",
+    },
+    {
+      id: "mq-3", tenant_id: "tenant-1", meeting_id: "meeting-1",
+      review_id: "rev-3", location_id: "loc-2", location_name: "Wynwood",
+      category: "food", quote_text: "Pasta was cold when it arrived.",
+      star_rating: 3, reviewed_at: "2026-07-03T18:45:00Z", content_purge_at: "2026-08-02T18:45:00Z",
+    },
+  ],
+  "meeting-2": [
+    {
+      id: "mq-4", tenant_id: "tenant-1", meeting_id: "meeting-2",
+      review_id: "rev-4", location_id: "loc-2", location_name: "Wynwood",
+      category: "service", quote_text: "Waited 20 minutes before anyone acknowledged us.",
+      star_rating: 2, reviewed_at: "2026-06-25T20:15:00Z", content_purge_at: "2026-07-25T20:15:00Z",
+    },
+  ],
+};
