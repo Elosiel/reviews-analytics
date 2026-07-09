@@ -1,19 +1,22 @@
-"use client";
-
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, CATEGORY_LABELS, fmtScore } from "@/lib/design";
 import { MOCK_LOCATIONS, MOCK_MATRIX } from "@/lib/mock-data";
+import { getDashboardData } from "@/lib/data/dashboard";
+import { createClient } from "@/lib/supabase/server";
 import CrossLocationHeatmap from "@/components/dashboard/CrossLocationHeatmap";
 
-export default function LocationsPage() {
+export default async function LocationsPage() {
+  const supabase = await createClient();
+  const data = await getDashboardData(supabase);
+  const locations = data.hasRealData ? data.locations : MOCK_LOCATIONS;
+  const matrix = data.hasRealData ? data.matrix : MOCK_MATRIX;
+
   // Weakest category per location (drives the location cards)
   const weakestByLocation: Record<string, (typeof CATEGORIES)[number]> = {};
-  for (const loc of MOCK_LOCATIONS) {
+  for (const loc of locations) {
     weakestByLocation[loc.id] = CATEGORIES.reduce((worst, cat) =>
-      MOCK_MATRIX[loc.id][cat].score < MOCK_MATRIX[loc.id][worst].score
-        ? cat
-        : worst
+      matrix[loc.id][cat].score < matrix[loc.id][worst].score ? cat : worst
     );
   }
 
@@ -35,9 +38,9 @@ export default function LocationsPage() {
 
       {/* ── Location cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {MOCK_LOCATIONS.map((loc) => {
+        {locations.map((loc) => {
           const weakest = weakestByLocation[loc.id];
-          const weakScore = MOCK_MATRIX[loc.id][weakest].score;
+          const weakScore = matrix[loc.id][weakest].score;
           return (
             <div
               key={loc.id}
@@ -82,7 +85,7 @@ export default function LocationsPage() {
       </div>
 
       {/* ── The heatmap ── */}
-      <CrossLocationHeatmap />
+      <CrossLocationHeatmap locations={locations} matrix={matrix} />
 
       <p className="text-xs text-ink-soft">
         <span className="inline-block w-3 h-3 rounded ring-2 ring-neg/60 mr-1.5 align-[-1px]" />

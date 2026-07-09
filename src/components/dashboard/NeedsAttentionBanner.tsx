@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ShieldAlert, X } from "lucide-react";
-import type { NeedsAttentionItem } from "@/lib/mock-data";
+import type { NeedsAttentionItem } from "@/types";
 
 const FLAG_LABELS: Record<NeedsAttentionItem["flag"], string> = {
   health_safety: "Health & safety",

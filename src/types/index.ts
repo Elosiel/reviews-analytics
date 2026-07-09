@@ -231,6 +231,24 @@ export interface TenantDocument {
   status: "processing" | "ready";
 }
 
+// Single cell of the cross-location category matrix / heatmap
+export interface MatrixCell {
+  score: number;
+  delta: number;
+  mentions: number;
+}
+
+// Danger flag: surfaced regardless of category (spec rule 6)
+export interface NeedsAttentionItem {
+  id: string;
+  location_id: string;
+  location_name: string;
+  flag: "health_safety" | "legal" | "discrimination" | "physical_safety";
+  star_rating: number;
+  quote: string;
+  reviewed_at: string;
+}
+
 // Cross-location roll-up — the core group-operator value
 export interface CrossLocationRollup {
   category: SentimentCategory;
