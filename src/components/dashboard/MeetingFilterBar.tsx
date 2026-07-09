@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, CATEGORY_LABELS } from "@/lib/design";
@@ -19,6 +19,7 @@ interface MeetingFilterBarProps {
   onDateStartChange: (value: string) => void;
   onDateEndChange: (value: string) => void;
   onGenerate: () => void;
+  generating?: boolean;
 }
 
 function chip(active: boolean) {
@@ -43,6 +44,7 @@ export default function MeetingFilterBar({
   onDateStartChange,
   onDateEndChange,
   onGenerate,
+  generating = false,
 }: MeetingFilterBarProps) {
   return (
     <div className="bg-paper rounded-2xl border border-line p-5 space-y-4">
@@ -117,8 +119,20 @@ export default function MeetingFilterBar({
       </div>
 
       <div className="flex justify-end pt-1">
-        <Button onClick={onGenerate} className="bg-forest hover:bg-forest-soft text-paper gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" /> Generate meeting
+        <Button
+          onClick={onGenerate}
+          disabled={generating}
+          className="bg-forest hover:bg-forest-soft text-paper gap-1.5"
+        >
+          {generating ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Building agenda…
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3.5 h-3.5" /> Generate meeting
+            </>
+          )}
         </Button>
       </div>
     </div>
