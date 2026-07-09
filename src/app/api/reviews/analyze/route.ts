@@ -42,14 +42,29 @@ export async function POST(request: Request) {
   const supabase = await createClient();
 
   // Find reviews with no analysis yet, excluding those with null review_text
-  // (already purged — can't analyze what we don't have)
+  // (already purged — can't analyze what we don't have). PostgREST filters
+  // aren't raw SQL, so "not in (select ...)" has to be two queries: pull
+  // already-analyzed ids, then exclude them from the candidate set.
+  const { data: analyzedRows, error: analyzedErr } = await supabase
+    .from("review_analyses")
+    .select("review_id");
+
+  if (analyzedErr) {
+    return NextResponse.json({ error: analyzedErr.message }, { status: 500 });
+  }
+
+  const analyzedIds = (analyzedRows ?? []).map((r) => r.review_id);
+  // A guaranteed-nonexistent id keeps this a single fluent chain (reassigning
+  // the query builder to a `let` blows up TS with "excessively deep" errors)
+  // while still excluding nothing when no reviews have been analyzed yet.
+  const excludeIds = analyzedIds.length > 0 ? analyzedIds.join(",") : "00000000-0000-0000-0000-000000000000";
+
   const { data: pending, error } = await supabase
     .from("reviews")
     .select("id, tenant_id, location_id, star_rating, review_text")
     .not("review_text", "is", null)
-    .not("id", "in",
-      `(select review_id from review_analyses)`
-    )
+    .not("id", "in", `(${excludeIds})`)
+    .order("ingested_at", { ascending: true })
     .limit(BATCH_SIZE);
 
   if (error) {
