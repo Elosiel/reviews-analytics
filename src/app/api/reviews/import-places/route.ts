@@ -5,15 +5,19 @@
  * while Google Business Profile read access is pending approval
  * (CLAUDE.md "Critical-Path Gates" #1). Internal/admin use only: run this
  * once per design-partner signup to backfill their locations, not called
- * from any tenant-facing UI.
+ * from any tenant-facing UI. For the point-and-click version of this,
+ * see /admin/import-places.
  *
- * Delete this route + src/lib/google/places-reviews.ts once
- * /api/reviews/sync (GBP) is live for real tenants. Rows it writes are
- * tagged so they're easy to find and remove:
+ * Delete this route + src/lib/google/places-reviews.ts +
+ * src/lib/pipeline/places-import.ts once /api/reviews/sync (GBP) is live
+ * for real tenants. Rows it writes are tagged so they're easy to find and
+ * remove:
  *   delete from locations where google_account_id = 'places-api-temp';
  *
  * Auth: same shared-secret pattern as the other pipeline routes
- * (x-cron-secret) — this is an ops tool, not a public endpoint.
+ * (x-cron-secret) — for scripted/curl use. The browser UI at
+ * /admin/import-places calls /api/admin/import-places instead, which
+ * authenticates via the operator's session.
  *
  * Body:
  *   {
@@ -34,18 +38,13 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { fetchPlaceReviews, PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
+import { importPlacesForTenant, triggerAnalysis, type PlacesImportLocationInput } from "@/lib/pipeline/places-import";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
 function verifyCronSecret(request: Request): boolean {
   const secret = request.headers.get("x-cron-secret");
   return !!CRON_SECRET && secret === CRON_SECRET;
-}
-
-interface LocationInput {
-  name: string;
-  place_id: string;
 }
 
 export async function POST(request: Request) {
@@ -67,7 +66,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const tenantId: string | undefined = body.tenant_id;
   const userId: string | undefined = body.user_id;
-  const locations: LocationInput[] = body.locations ?? [];
+  const locations: PlacesImportLocationInput[] = body.locations ?? [];
 
   if (!tenantId || !userId || locations.length === 0) {
     return NextResponse.json(
@@ -80,76 +79,8 @@ export async function POST(request: Request) {
   // must bypass RLS deliberately (never expose this key to the client).
   const supabase = createServiceClient(supabaseUrl, serviceRoleKey);
 
-  const results: {
-    place_id: string;
-    name: string;
-    location_id?: string;
-    reviews_inserted?: number;
-    error?: string;
-  }[] = [];
-
-  for (const input of locations) {
-    try {
-      const place = await fetchPlaceReviews(input.place_id, mapsKey);
-      const name = input.name || place.name;
-
-      const { data: locRow, error: locErr } = await supabase
-        .from("locations")
-        .upsert(
-          {
-            tenant_id: tenantId,
-            user_id: userId,
-            google_account_id: PLACES_IMPORT_SENTINEL,
-            google_location_id: input.place_id,
-            name,
-            address: place.address,
-            rating: place.rating,
-            review_count: place.review_count,
-            last_synced_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "tenant_id,google_location_id" }
-        )
-        .select("id")
-        .single();
-
-      if (locErr || !locRow) throw new Error(locErr?.message ?? "Failed to upsert location");
-
-      const rows = place.reviews.map((r) => ({
-        tenant_id: tenantId,
-        location_id: locRow.id,
-        external_review_id: r.external_review_id,
-        source: "google_places_temp",
-        star_rating: r.star_rating,
-        review_text: r.review_text,
-        reviewer_name: r.reviewer_name,
-        reviewed_at: r.reviewed_at,
-        status: "ingested",
-      }));
-
-      if (rows.length > 0) {
-        const { error: insertErr } = await supabase
-          .from("reviews")
-          .upsert(rows, { onConflict: "tenant_id,external_review_id", ignoreDuplicates: true });
-
-        if (insertErr) throw new Error(insertErr.message);
-      }
-
-      results.push({ place_id: input.place_id, name, location_id: locRow.id, reviews_inserted: rows.length });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Places import failed for ${input.place_id}:`, msg);
-      results.push({ place_id: input.place_id, name: input.name, error: msg });
-    }
-  }
-
-  // Same downstream chain as the real sync: analyze → rollup.
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-  fetch(`${appUrl}/api/reviews/analyze`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET ?? "" },
-    body: JSON.stringify({ trigger: "post_sync" }),
-  }).catch((e) => console.error("Failed to trigger analysis:", e));
+  const results = await importPlacesForTenant(supabase, tenantId, userId, locations, mapsKey);
+  triggerAnalysis(CRON_SECRET);
 
   const totalInserted = results.reduce((sum, r) => sum + (r.reviews_inserted ?? 0), 0);
   return NextResponse.json({ imported: results.length, reviews_inserted: totalInserted, results });
