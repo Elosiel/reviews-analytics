@@ -12,11 +12,14 @@ export default async function LocationsPage() {
   const locations = data.hasRealData ? data.locations : MOCK_LOCATIONS;
   const matrix = data.hasRealData ? data.matrix : MOCK_MATRIX;
 
-  // Weakest category per location (drives the location cards)
+  // Weakest category per location (drives the location cards). Only
+  // categories guests actually mentioned count — zero-mention cells
+  // default to 0.00 and would otherwise "beat" every positive score.
   const weakestByLocation: Record<string, (typeof CATEGORIES)[number]> = {};
   for (const loc of locations) {
-    weakestByLocation[loc.id] = CATEGORIES.reduce((worst, cat) =>
-      matrix[loc.id][cat].score < matrix[loc.id][worst].score ? cat : worst
+    const mentioned = CATEGORIES.filter((cat) => matrix[loc.id][cat].mentions > 0);
+    weakestByLocation[loc.id] = (mentioned.length > 0 ? mentioned : CATEGORIES).reduce(
+      (worst, cat) => (matrix[loc.id][cat].score < matrix[loc.id][worst].score ? cat : worst)
     );
   }
 

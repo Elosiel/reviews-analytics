@@ -67,24 +67,29 @@ export default function WeakestLinkSpotlight({
       <div className="mt-4 rounded-xl bg-[#48211a] border border-[#6b3325] p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm font-semibold">
-            {CATEGORY_LABELS[worstCategory]} is the problem
+            {CATEGORY_LABELS[worstCategory]}{" "}
+            {cell.score < 0 ? "is the problem" : "is the weakest spot — still positive"}
           </p>
           <p className="text-sm font-bold tabular-nums text-[#ffb09a]">
             {fmtScore(cell.score)}
-            <span className="text-xs font-semibold ml-2">
-              ▼ {fmtScore(cell.delta)} in 30 days
-            </span>
+            {cell.delta !== 0 && (
+              <span className="text-xs font-semibold ml-2">
+                {cell.delta < 0 ? "▼" : "▲"} {fmtScore(cell.delta)} in 30 days
+              </span>
+            )}
           </p>
         </div>
-        <blockquote className="mt-2 text-[13px] text-[#e8c4b5] italic border-l-2 border-[#a35139] pl-3 leading-relaxed">
-          &ldquo;{topQuote}&rdquo;
-        </blockquote>
+        {topQuote && (
+          <blockquote className="mt-2 text-[13px] text-[#e8c4b5] italic border-l-2 border-[#a35139] pl-3 leading-relaxed">
+            &ldquo;{topQuote}&rdquo;
+          </blockquote>
+        )}
       </div>
 
       <div className="mt-auto pt-4 flex items-center justify-between gap-3">
         <p className="text-xs text-[#d9a795]">
-          {cell.mentions} guests mentioned it · {openIssueCount} open issue
-          {openIssueCount !== 1 ? "s" : ""} here
+          {cell.mentions} guest{cell.mentions !== 1 ? "s" : ""} mentioned it ·{" "}
+          {openIssueCount} open issue{openIssueCount !== 1 ? "s" : ""} here
         </p>
         <button
           onClick={onReview}

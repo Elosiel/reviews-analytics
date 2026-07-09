@@ -55,21 +55,34 @@ export default function DashboardOverviewClient({
 
   const locationNames = Object.fromEntries(locations.map((l) => [l.id, l.name]));
 
-  // The weakest link: lowest-rated location + its worst category
+  // The weakest link: lowest-rated location + its worst category.
+  // Only categories guests actually mentioned count — a zero-mention
+  // category defaults to 0.00 and would otherwise "beat" every positive
+  // score with a meaningless empty cell.
   const weakestLocation = locations.reduce((worst, loc) =>
     (loc.rating ?? 5) < (worst.rating ?? 5) ? loc : worst
   );
-  const weakestCategory = CATEGORIES.reduce((worst, cat) =>
-    matrix[weakestLocation.id][cat].score < matrix[weakestLocation.id][worst].score
-      ? cat
-      : worst
+  const mentionedCategories = CATEGORIES.filter(
+    (cat) => matrix[weakestLocation.id][cat].mentions > 0
+  );
+  const weakestCategory = (mentionedCategories.length > 0 ? mentionedCategories : CATEGORIES).reduce(
+    (worst, cat) =>
+      matrix[weakestLocation.id][cat].score < matrix[weakestLocation.id][worst].score
+        ? cat
+        : worst
   );
   const weakestIssues = rankedIssues.filter(
     (i) => i.location_id === weakestLocation.id
   );
+  // When the location has no negative issues (all categories positive),
+  // fall back to what guests are actually saying there rather than
+  // rendering an empty quote.
   const weakestTopQuote =
     weakestIssues.find((i) => i.category === weakestCategory)?.quotes[0] ??
     weakestIssues[0]?.quotes[0] ??
+    loves.find((i) => i.location_id === weakestLocation.id && i.category === weakestCategory)
+      ?.quotes[0] ??
+    loves.find((i) => i.location_id === weakestLocation.id)?.quotes[0] ??
     "";
 
   function focusWeakestLink(locationId?: string) {
