@@ -17,6 +17,8 @@ import type {
   Sop,
   Meeting,
   MeetingQuoteSnapshot,
+  MatrixCell,
+  NeedsAttentionItem,
 } from "@/types";
 
 // ── Restaurant profile (collected at onboarding, editable in Settings) ──
@@ -86,12 +88,6 @@ export const MOCK_LOCATIONS: Location[] = [
 ];
 
 // ── Cross-location matrix: 90-day rollup per location × category ──
-export interface MatrixCell {
-  score: number;
-  delta: number;
-  mentions: number;
-}
-
 export const MOCK_MATRIX: Record<
   string,
   Record<SentimentCategory, MatrixCell>
@@ -276,17 +272,6 @@ export const MOCK_RECOVERY: DriftAlert = {
   recovery_score: 0.42,
   recovered_at: "2026-06-23T08:00:00Z",
 };
-
-// ── Danger flag: surfaced regardless of category (spec rule 6) ──
-export interface NeedsAttentionItem {
-  id: string;
-  location_id: string;
-  location_name: string;
-  flag: "health_safety" | "legal" | "discrimination" | "physical_safety";
-  star_rating: number;
-  quote: string;
-  reviewed_at: string;
-}
 
 export const MOCK_NEEDS_ATTENTION: NeedsAttentionItem[] = [
   {

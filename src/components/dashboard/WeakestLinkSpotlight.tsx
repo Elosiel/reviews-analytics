@@ -1,8 +1,7 @@
 "use client";
 
 import { ArrowRight, MapPin } from "lucide-react";
-import type { Location, SentimentCategory } from "@/types";
-import type { MatrixCell } from "@/lib/mock-data";
+import type { Location, SentimentCategory, MatrixCell } from "@/types";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
 
 interface WeakestLinkSpotlightProps {
