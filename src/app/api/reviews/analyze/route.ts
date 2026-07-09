@@ -15,6 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { analyzeReview } from "@/lib/pipeline/claude";
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -39,7 +40,10 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createClient();
+  // This route processes pending reviews across every tenant in one batch
+  // (matching pg_cron's own scope) — the auth check above just gates who
+  // can trigger it, so the actual work always runs as service-role.
+  const supabase = createServiceClient();
 
   // Find reviews with no analysis yet, excluding those with null review_text
   // (already purged — can't analyze what we don't have). PostgREST filters

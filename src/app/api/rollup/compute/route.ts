@@ -18,6 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { SentimentCategory } from "@/types";
 import { DRIFT_THRESHOLD } from "@/types";
 
@@ -47,7 +48,9 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createClient();
+  // Computes rollups across every tenant in one pass (matching pg_cron's
+  // own scope) — the auth check above just gates who can trigger it.
+  const supabase = createServiceClient();
 
   // Get all (tenant_id, location_id) pairs to compute rollups for
   const { data: locations } = await supabase

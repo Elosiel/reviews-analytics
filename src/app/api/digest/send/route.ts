@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { sendDigestEmail } from "@/lib/pipeline/digest-email";
 import type { SentimentCategory } from "@/types";
 
@@ -30,7 +30,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createClient();
+  // Digest sends across every tenant in one pass — always cron-triggered,
+  // never a per-user request, so this always runs as service-role.
+  const supabase = createServiceClient();
 
   // Get all tenants with at least one location
   const { data: profiles } = await supabase
