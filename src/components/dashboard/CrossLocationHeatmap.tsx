@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { SentimentCategory } from "@/types";
+import type { Location, MatrixCell, SentimentCategory } from "@/types";
 import { cn } from "@/lib/utils";
 import {
   CATEGORIES,
@@ -10,7 +10,6 @@ import {
   fmtScore,
   heatStep,
 } from "@/lib/design";
-import { MOCK_LOCATIONS, MOCK_MATRIX } from "@/lib/mock-data";
 
 interface HoverCell {
   locId: string;
@@ -23,8 +22,12 @@ interface HoverCell {
  * color-alone); weakest negative cell per category is outlined.
  */
 export default function CrossLocationHeatmap({
+  locations,
+  matrix,
   onSelectLocation,
 }: {
+  locations: Location[];
+  matrix: Record<string, Record<SentimentCategory, MatrixCell>>;
   onSelectLocation?: (locationId: string) => void;
 }) {
   const [hover, setHover] = useState<HoverCell | null>(null);
@@ -34,9 +37,9 @@ export default function CrossLocationHeatmap({
     string
   >;
   for (const cat of CATEGORIES) {
-    let worst = MOCK_LOCATIONS[0].id;
-    for (const loc of MOCK_LOCATIONS) {
-      if (MOCK_MATRIX[loc.id][cat].score < MOCK_MATRIX[worst][cat].score) {
+    let worst = locations[0]?.id;
+    for (const loc of locations) {
+      if (matrix[loc.id][cat].score < matrix[worst][cat].score) {
         worst = loc.id;
       }
     }
@@ -44,8 +47,9 @@ export default function CrossLocationHeatmap({
   }
 
   const groupAvg = (cat: SentimentCategory) =>
-    MOCK_LOCATIONS.reduce((s, l) => s + MOCK_MATRIX[l.id][cat].score, 0) /
-    MOCK_LOCATIONS.length;
+    locations.length === 0
+      ? 0
+      : locations.reduce((s, l) => s + matrix[l.id][cat].score, 0) / locations.length;
 
   return (
     <div className="bg-paper rounded-2xl border border-line overflow-hidden">
@@ -91,7 +95,7 @@ export default function CrossLocationHeatmap({
             </tr>
           </thead>
           <tbody>
-            {MOCK_LOCATIONS.map((loc) => (
+            {locations.map((loc) => (
               <tr key={loc.id}>
                 <td className="px-3 py-2">
                   <button
@@ -110,7 +114,7 @@ export default function CrossLocationHeatmap({
                   </button>
                 </td>
                 {CATEGORIES.map((cat) => {
-                  const cell = MOCK_MATRIX[loc.id][cat];
+                  const cell = matrix[loc.id][cat];
                   const step = heatStep(cell.score);
                   const isWeakest =
                     weakestPerCategory[cat] === loc.id && cell.score < 0;
