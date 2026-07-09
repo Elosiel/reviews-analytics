@@ -13,7 +13,7 @@
  * On completion triggers /api/rollup/compute to refresh aggregations.
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { analyzeReview } from "@/lib/pipeline/claude";
@@ -137,30 +137,38 @@ export async function POST(request: Request) {
 
   const succeeded = results.filter((r) => r.success).length;
 
+  // Both of these run via after() — a plain un-awaited fetch() gets cut
+  // off when the serverless function tears down right after the response
+  // is sent, so the self-chain and rollup trigger below would silently
+  // never happen otherwise.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+
   // If we processed a full batch, there may be more — re-queue
   if (pending.length === BATCH_SIZE) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-    fetch(`${appUrl}/api/reviews/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-cron-secret": CRON_SECRET ?? "",
-      },
-      body: JSON.stringify({ trigger: "post_sync" }),
-    }).catch(() => {});
+    after(() =>
+      fetch(`${appUrl}/api/reviews/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": CRON_SECRET ?? "",
+        },
+        body: JSON.stringify({ trigger: "post_sync" }),
+      }).catch(() => {})
+    );
   }
 
   // Trigger rollup recomputation
   if (succeeded > 0) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-    fetch(`${appUrl}/api/rollup/compute`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-cron-secret": CRON_SECRET ?? "",
-      },
-      body: JSON.stringify({ trigger: "post_analysis" }),
-    }).catch(() => {});
+    after(() =>
+      fetch(`${appUrl}/api/rollup/compute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": CRON_SECRET ?? "",
+        },
+        body: JSON.stringify({ trigger: "post_analysis" }),
+      }).catch(() => {})
+    );
   }
 
   return NextResponse.json({ analyzed: succeeded, total: pending.length, results });

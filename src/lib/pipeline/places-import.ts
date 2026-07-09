@@ -9,6 +9,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { after } from "next/server";
 import { fetchPlaceReviews, PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
 
 export interface PlacesImportLocationInput {
@@ -92,12 +93,17 @@ export async function importPlacesForTenant(
 }
 
 // Fires the same post-ingest chain the real GBP sync uses — analyze, which
-// itself triggers rollup/compute. Fire-and-forget, matches reviews/sync.
+// itself triggers rollup/compute. Runs via after(): must be called during
+// an active route handler's execution (which every caller of this function
+// satisfies) — a plain un-awaited fetch() gets cut off when the serverless
+// function tears down right after the response is sent.
 export function triggerAnalysis(cronSecret: string | undefined) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-  fetch(`${appUrl}/api/reviews/analyze`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret ?? "" },
-    body: JSON.stringify({ trigger: "post_sync" }),
-  }).catch((e) => console.error("Failed to trigger analysis:", e));
+  after(() =>
+    fetch(`${appUrl}/api/reviews/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": cronSecret ?? "" },
+      body: JSON.stringify({ trigger: "post_sync" }),
+    }).catch((e) => console.error("Failed to trigger analysis:", e))
+  );
 }
