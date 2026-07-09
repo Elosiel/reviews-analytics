@@ -118,13 +118,27 @@ function buildMatrixFromRollups(locations: Location[], rows: RollupRow[]): Dashb
   return matrix;
 }
 
+const QUOTES_PER_ISSUE = 3;
+const QUOTE_MAX_CHARS = 240;
+
+// Long reviews (Google reviews can run paragraphs) are trimmed to a
+// snippet at a word boundary — a card quote, not the full essay.
+function snippet(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= QUOTE_MAX_CHARS) return trimmed;
+  const cut = trimmed.slice(0, QUOTE_MAX_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${cut.slice(0, lastSpace > 120 ? lastSpace : QUOTE_MAX_CHARS)}…`;
+}
+
 // Verbatim quotes aren't in rollups — small, targeted live query, capped
-// and restricted to non-purged text (30-day verbatim rule).
-async function fetchQuotes(
+// and restricted to non-purged text (30-day verbatim rule). Returns more
+// candidates than a card displays so allocateQuotes below can prefer
+// variety across cards.
+async function fetchQuoteCandidates(
   supabase: SupabaseClient,
   locationId: string,
-  category: SentimentCategory,
-  limit = 3
+  category: SentimentCategory
 ): Promise<string[]> {
   const { data } = await supabase
     .from("review_categories")
@@ -141,41 +155,55 @@ async function fetchQuotes(
     .map((r) => (Array.isArray(r.reviews) ? r.reviews[0] : r.reviews))
     .filter((r): r is JoinedReview & { review_text: string } => !!r?.review_text)
     .sort((a, b) => new Date(b.reviewed_at).getTime() - new Date(a.reviewed_at).getTime())
-    .slice(0, limit)
     .map((r) => r.review_text);
+}
+
+// One review often legitimately hits several categories (great food AND
+// great service), so with few reviews every card would show the identical
+// quote set. Prefer quotes no earlier card has used; fall back to reuse
+// only when a category has nothing unique left.
+function allocateQuotes(candidates: string[], used: Set<string>): string[] {
+  const fresh = candidates.filter((q) => !used.has(q));
+  const picked = [...fresh, ...candidates.filter((q) => used.has(q))].slice(0, QUOTES_PER_ISSUE);
+  for (const q of picked) used.add(q);
+  return picked.map(snippet);
 }
 
 async function buildRankedIssuesFromRows(
   supabase: SupabaseClient,
   rows: RollupRow[],
   locationNames: Record<string, string>,
-  direction: "negative" | "positive"
+  direction: "negative" | "positive",
+  usedQuotes: Set<string>
 ): Promise<RankedIssue[]> {
-  return Promise.all(
-    rows.map(async (r) => {
-      const delta = r.sentiment_delta ?? null;
-      const severity =
-        direction === "negative" && delta !== null
-          ? delta <= DRIFT_THRESHOLD.high
-            ? "high"
-            : delta <= DRIFT_THRESHOLD.medium
-            ? "medium"
-            : null
-          : null;
-      const quotes = await fetchQuotes(supabase, r.location_id, r.category as SentimentCategory);
-      const issue: RankedIssue = {
-        category: r.category as SentimentCategory,
-        location_id: r.location_id,
-        location_name: locationNames[r.location_id] ?? "Unknown location",
-        mention_count: r.mention_count ?? 0,
-        avg_sentiment_score: r.avg_sentiment_score ?? 0,
-        sentiment_delta: delta,
-        severity,
-        quotes,
-      };
-      return issue;
-    })
+  const candidatesPerRow = await Promise.all(
+    rows.map((r) => fetchQuoteCandidates(supabase, r.location_id, r.category as SentimentCategory))
   );
+
+  // Allocation is sequential in rank order so the top-ranked card gets
+  // first pick of the freshest quotes.
+  return rows.map((r, i) => {
+    const delta = r.sentiment_delta ?? null;
+    const severity =
+      direction === "negative" && delta !== null
+        ? delta <= DRIFT_THRESHOLD.high
+          ? "high"
+          : delta <= DRIFT_THRESHOLD.medium
+          ? "medium"
+          : null
+        : null;
+    const issue: RankedIssue = {
+      category: r.category as SentimentCategory,
+      location_id: r.location_id,
+      location_name: locationNames[r.location_id] ?? "Unknown location",
+      mention_count: r.mention_count ?? 0,
+      avg_sentiment_score: r.avg_sentiment_score ?? 0,
+      sentiment_delta: delta,
+      severity,
+      quotes: allocateQuotes(candidatesPerRow[i], usedQuotes),
+    };
+    return issue;
+  });
 }
 
 async function buildNeedsAttention(supabase: SupabaseClient): Promise<NeedsAttentionItem[]> {
@@ -338,10 +366,11 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
     .sort((a, b) => (b.mention_count ?? 0) - (a.mention_count ?? 0))
     .slice(0, 8);
 
-  const [rankedIssues, loves] = await Promise.all([
-    buildRankedIssuesFromRows(supabase, issuesRows, locationNames, "negative"),
-    buildRankedIssuesFromRows(supabase, lovesRows, locationNames, "positive"),
-  ]);
+  // Sequential (not Promise.all) so both lists share one used-quote pool —
+  // issues get first pick, loves fill from what's left.
+  const usedQuotes = new Set<string>();
+  const rankedIssues = await buildRankedIssuesFromRows(supabase, issuesRows, locationNames, "negative", usedQuotes);
+  const loves = await buildRankedIssuesFromRows(supabase, lovesRows, locationNames, "positive", usedQuotes);
 
   const week = buildWeekSummary(rollups7, weekReviewCount, locationNames);
   const groupTrend = aggregateByWeek(rollups7);
