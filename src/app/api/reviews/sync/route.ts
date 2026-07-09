@@ -14,7 +14,7 @@
  * Verbatim text is only stored — never re-fetched or extended beyond that date.
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
@@ -161,16 +161,20 @@ export async function POST(request: Request) {
     }
   }
 
-  // Trigger analysis for any reviews that haven't been analyzed yet
+  // Trigger analysis for any reviews that haven't been analyzed yet.
+  // Runs via after() — a plain un-awaited fetch() gets cut off when the
+  // serverless function tears down right after the response is sent.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-  fetch(`${appUrl}/api/reviews/analyze`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-cron-secret": CRON_SECRET ?? "",
-    },
-    body: JSON.stringify({ trigger: "post_sync" }),
-  }).catch((e) => console.error("Failed to trigger analysis:", e));
+  after(() =>
+    fetch(`${appUrl}/api/reviews/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-cron-secret": CRON_SECRET ?? "",
+      },
+      body: JSON.stringify({ trigger: "post_sync" }),
+    }).catch((e) => console.error("Failed to trigger analysis:", e))
+  );
 
   const totalInserted = results.reduce((sum, r) => sum + r.inserted, 0);
   return NextResponse.json({
