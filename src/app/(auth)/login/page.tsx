@@ -17,15 +17,24 @@ export default function LoginPage() {
 
 function LoginInner() {
   const searchParams = useSearchParams();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [signupSent, setSignupSent] = useState(false);
   const [error, setError] = useState<string | null>(
     searchParams.get("error") === "auth_failed"
       ? "Sign-in failed. Please try again."
       : null
   );
+
+  function toggleMode() {
+    setMode((m) => (m === "signin" ? "signup" : "signin"));
+    setError(null);
+  }
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +57,42 @@ function LoginInner() {
     }
     // Full navigation so the middleware picks up the new session cookies
     window.location.assign("/dashboard");
+  }
+
+  async function handleEmailSignUp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setEmailLoading(true);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: fullName ? { full_name: fullName } : undefined,
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setEmailLoading(false);
+      return;
+    }
+    if (data.session) {
+      // Email confirmation is off — the account is ready immediately
+      window.location.assign("/onboarding");
+      return;
+    }
+    // Confirmation required — Supabase emailed a verify link
+    setSignupSent(true);
+    setEmailLoading(false);
   }
 
   async function handleGoogleSignIn() {
@@ -129,10 +174,12 @@ function LoginInner() {
 
           <div className="space-y-2 text-center">
             <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-              Sign in to your dashboard
+              {mode === "signin" ? "Sign in to your dashboard" : "Create your account"}
             </h1>
             <p className="text-sm text-zinc-500">
-              Access your restaurant sentiment intelligence
+              {mode === "signin"
+                ? "Access your restaurant sentiment intelligence"
+                : "Start tracking what's costing you stars"}
             </p>
           </div>
 
@@ -142,107 +189,183 @@ function LoginInner() {
             </p>
           )}
 
-          {/* Email + password */}
-          <form onSubmit={handleEmailSignIn} className="space-y-3">
-            <div className="space-y-1.5">
-              <label
-                htmlFor="email"
-                className="text-xs font-medium text-zinc-700"
+          {signupSent ? (
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-zinc-600 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3">
+                Check <strong>{email}</strong> for a confirmation link to finish creating your account.
+              </p>
+              <button
+                onClick={() => {
+                  setSignupSent(false);
+                  setMode("signin");
+                }}
+                className="text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
               >
-                Email
-              </label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@restaurant.com"
-                className="h-11"
-              />
+                Back to sign in
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="password"
-                className="text-xs font-medium text-zinc-700"
+          ) : (
+            <>
+              {/* Email + password */}
+              <form
+                onSubmit={mode === "signin" ? handleEmailSignIn : handleEmailSignUp}
+                className="space-y-3"
               >
-                Password
-              </label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="h-11"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={emailLoading || googleLoading}
-              className="w-full h-11 bg-zinc-900 hover:bg-zinc-800 text-white font-medium"
-            >
-              {emailLoading ? <Spinner label="Signing in…" /> : "Sign in"}
-            </Button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-zinc-100" />
-            <span className="text-xs text-zinc-400">or</span>
-            <div className="h-px flex-1 bg-zinc-100" />
-          </div>
-
-          <Button
-            onClick={handleGoogleSignIn}
-            disabled={googleLoading || emailLoading}
-            variant="outline"
-            className="w-full h-11 font-medium gap-3"
-          >
-            {googleLoading ? (
-              <Spinner label="Signing in…" />
-            ) : (
-              <>
-                <GoogleIcon />
-                Continue with Google
-              </>
-            )}
-          </Button>
-
-          <div className="space-y-3 rounded-lg bg-zinc-50 border border-zinc-100 p-4">
-            <p className="text-xs font-medium text-zinc-700">
-              What we access
-            </p>
-            <ul className="space-y-1.5">
-              {[
-                "Your Google Business Profile locations",
-                "Reviews written about your locations",
-                "Basic Google account info (name, email)",
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2 text-xs text-zinc-500">
-                  <svg
-                    className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clipRule="evenodd"
+                {mode === "signup" && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="fullName" className="text-xs font-medium text-zinc-700">
+                      Name
+                    </label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      autoComplete="name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Your name"
+                      className="h-11"
                     />
-                  </svg>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-zinc-400 pt-1 border-t border-zinc-100">
-              Your reviews stay exactly as they are — we read them to power
-              your insights.
-            </p>
-          </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="email"
+                    className="text-xs font-medium text-zinc-700"
+                  >
+                    Email
+                  </label>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@restaurant.com"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="password"
+                    className="text-xs font-medium text-zinc-700"
+                  >
+                    Password
+                  </label>
+                  <Input
+                    id="password"
+                    type="password"
+                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-11"
+                  />
+                </div>
+                {mode === "signup" && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="confirmPassword" className="text-xs font-medium text-zinc-700">
+                      Confirm password
+                    </label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-11"
+                    />
+                  </div>
+                )}
+                <Button
+                  type="submit"
+                  disabled={emailLoading || googleLoading}
+                  className="w-full h-11 bg-zinc-900 hover:bg-zinc-800 text-white font-medium"
+                >
+                  {emailLoading ? (
+                    <Spinner label={mode === "signin" ? "Signing in…" : "Creating account…"} />
+                  ) : mode === "signin" ? (
+                    "Sign in"
+                  ) : (
+                    "Create account"
+                  )}
+                </Button>
+              </form>
+
+              <p className="text-center text-sm text-zinc-500">
+                {mode === "signin" ? "Don't have an account?" : "Already have an account?"}{" "}
+                <button
+                  type="button"
+                  onClick={toggleMode}
+                  className="font-medium text-zinc-900 underline underline-offset-2 hover:text-zinc-700"
+                >
+                  {mode === "signin" ? "Sign up" : "Sign in"}
+                </button>
+              </p>
+            </>
+          )}
+
+          {!signupSent && (
+            <>
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-zinc-100" />
+                <span className="text-xs text-zinc-400">or</span>
+                <div className="h-px flex-1 bg-zinc-100" />
+              </div>
+
+              <Button
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading || emailLoading}
+                variant="outline"
+                className="w-full h-11 font-medium gap-3"
+              >
+                {googleLoading ? (
+                  <Spinner label="Signing in…" />
+                ) : (
+                  <>
+                    <GoogleIcon />
+                    Continue with Google
+                  </>
+                )}
+              </Button>
+
+              <div className="space-y-3 rounded-lg bg-zinc-50 border border-zinc-100 p-4">
+                <p className="text-xs font-medium text-zinc-700">
+                  What we access
+                </p>
+                <ul className="space-y-1.5">
+                  {[
+                    "Your Google Business Profile locations",
+                    "Reviews written about your locations",
+                    "Basic Google account info (name, email)",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-xs text-zinc-500">
+                      <svg
+                        className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-zinc-400 pt-1 border-t border-zinc-100">
+                  Your reviews stay exactly as they are — we read them to power
+                  your insights.
+                </p>
+              </div>
+            </>
+          )}
 
           <p className="text-center text-xs text-zinc-400">
             By signing in you agree to our{" "}
