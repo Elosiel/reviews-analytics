@@ -154,13 +154,36 @@ export default async function SettingsPage() {
               </p>
             )}
           </div>
-          <a href="/onboarding">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Plus className="w-3.5 h-3.5" />
-              Add location
-            </Button>
-          </a>
+          <div className="flex items-center gap-2">
+            <a href="/dashboard/settings/import">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                Search & import now
+              </Button>
+            </a>
+            <a href="/onboarding">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Plus className="w-3.5 h-3.5" />
+                Add location
+              </Button>
+            </a>
+          </div>
         </div>
+
+        {!tokenRow && (
+          <div className="px-6 py-3 bg-cream/60">
+            <p className="text-xs text-ink-soft">
+              Waiting on Google&apos;s official Business Profile approval?{" "}
+              <a
+                href="/dashboard/settings/import"
+                className="text-forest font-medium underline underline-offset-2"
+              >
+                Search & import your reviews now
+              </a>{" "}
+              — real data, temporary bridge, no waiting.
+            </p>
+          </div>
+        )}
 
         {!locations || locations.length === 0 ? (
           <div className="px-6 py-8 text-center text-sm text-ink-faint">
