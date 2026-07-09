@@ -7,6 +7,7 @@ import {
   MOCK_MATRIX,
   MOCK_NEEDS_ATTENTION,
   MOCK_RECOVERY,
+  MOCK_REVIEWS,
   MOCK_WEEK,
   mockTrendData,
   mockGroupTrend,
@@ -36,6 +37,7 @@ export default async function DashboardPage() {
         week={{ new_reviews: MOCK_WEEK.new_reviews, best: MOCK_WEEK.best, worst: MOCK_WEEK.worst }}
         groupTrend={mockGroupTrend()}
         trendsByCategory={trendsByCategory}
+        reviews={MOCK_REVIEWS}
       />
     );
   }
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
       week={data.week}
       groupTrend={data.groupTrend}
       trendsByCategory={data.trendsByCategory}
+      reviews={data.reviews}
     />
   );
 }
