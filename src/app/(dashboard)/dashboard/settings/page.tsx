@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, RefreshCw, Plus, Sparkles } from "lucide-react";
+import DeleteLocationButton from "@/components/dashboard/DeleteLocationButton";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -209,14 +210,17 @@ export default async function SettingsPage() {
                 </div>
                 <p className="text-xs text-ink-faint truncate">{loc.address}</p>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-semibold text-ink tabular-nums">
-                  {loc.rating?.toFixed(1) ?? "—"}
-                  <span className="text-gold">★</span>
-                </p>
-                <p className="text-xs text-ink-faint">
-                  {loc.review_count} reviews
-                </p>
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-ink tabular-nums">
+                    {loc.rating?.toFixed(1) ?? "—"}
+                    <span className="text-gold">★</span>
+                  </p>
+                  <p className="text-xs text-ink-faint">
+                    {loc.review_count} reviews
+                  </p>
+                </div>
+                <DeleteLocationButton locationId={loc.id} locationName={loc.name} />
               </div>
             </div>
           ))
