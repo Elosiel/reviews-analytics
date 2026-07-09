@@ -71,6 +71,7 @@ export default function ImportReviewsSearch() {
   const [stateCode, setStateCode] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchUnavailable, setSearchUnavailable] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [queue, setQueue] = useState<SearchResult[]>([]);
@@ -78,28 +79,44 @@ export default function ImportReviewsSearch() {
   const [outcomes, setOutcomes] = useState<ImportOutcome[] | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
-  function scheduleSearch(name: string, cityVal: string, stateVal: string) {
-    if (debounce.current) clearTimeout(debounce.current);
+  async function runSearch(name: string, cityVal: string, stateVal: string) {
     const q = name.trim();
     if (q.length < 3) {
       setResults(null);
-      setSearching(false);
+      setSearchUnavailable(false);
       return;
     }
     const stateName = US_STATES.find(([code]) => code === stateVal)?.[1] ?? "";
     const full = [q, cityVal.trim(), stateName].filter(Boolean).join(", ");
     setSearching(true);
-    debounce.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/places/search?q=${encodeURIComponent(full)}`);
-        const data = await res.json();
-        setResults(Array.isArray(data.places) ? data.places : []);
-      } catch {
+    try {
+      const res = await fetch(`/api/places/search?q=${encodeURIComponent(full)}`);
+      const data = await res.json();
+      // The API returns `places: null` (not []) when the Google Maps key
+      // isn't configured — distinct from a genuine zero-result search.
+      if (data.places === null) {
+        setSearchUnavailable(true);
         setResults([]);
-      } finally {
-        setSearching(false);
+      } else {
+        setSearchUnavailable(false);
+        setResults(Array.isArray(data.places) ? data.places : []);
       }
-    }, 350);
+    } catch {
+      setSearchUnavailable(false);
+      setResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function scheduleSearch(name: string, cityVal: string, stateVal: string) {
+    if (debounce.current) clearTimeout(debounce.current);
+    if (name.trim().length < 3) {
+      setResults(null);
+      setSearchUnavailable(false);
+      return;
+    }
+    debounce.current = setTimeout(() => runSearch(name, cityVal, stateVal), 350);
   }
 
   function handleQueryChange(value: string) {
@@ -113,6 +130,11 @@ export default function ImportReviewsSearch() {
   function handleStateChange(value: string) {
     setStateCode(value);
     scheduleSearch(query, city, value);
+  }
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (debounce.current) clearTimeout(debounce.current);
+    runSearch(query, city, stateCode);
   }
 
   function addToQueue(r: SearchResult) {
@@ -167,7 +189,7 @@ export default function ImportReviewsSearch() {
 
       {/* ── Search ── */}
       <div className="bg-cream rounded-2xl border border-line p-5 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-2.5">
+        <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
             {searching ? (
               <Loader2 className="w-4 h-4 text-ink-faint absolute left-4 top-1/2 -translate-y-1/2 animate-spin" />
@@ -196,7 +218,7 @@ export default function ImportReviewsSearch() {
             value={stateCode}
             onChange={(e) => handleStateChange(e.target.value)}
             className={cn(
-              "sm:w-40 rounded-2xl border border-line bg-paper px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm appearance-none cursor-pointer",
+              "sm:w-36 rounded-2xl border border-line bg-paper px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-forest/40 focus:border-forest/40 shadow-sm appearance-none cursor-pointer",
               stateCode ? "text-ink" : "text-ink-faint"
             )}
           >
@@ -205,7 +227,15 @@ export default function ImportReviewsSearch() {
               <option key={code} value={code}>{name}</option>
             ))}
           </select>
-        </div>
+          <Button
+            type="submit"
+            disabled={searching || query.trim().length < 3}
+            className="sm:w-auto h-[46px] px-5 bg-forest hover:bg-forest-soft text-paper gap-2 shrink-0"
+          >
+            {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            Search
+          </Button>
+        </form>
         <p className="text-xs text-ink-faint text-center">
           Type the name, then narrow by city or state. Name-only searches list A–Z.
         </p>
@@ -242,7 +272,15 @@ export default function ImportReviewsSearch() {
                 </button>
               );
             })}
-            {results.length === 0 && !searching && (
+            {results.length === 0 && !searching && searchUnavailable && (
+              <p className="text-center py-4 text-sm text-neg bg-[#fbeeea] rounded-xl px-4">
+                Restaurant search isn&apos;t configured yet — an admin needs
+                to add the Google Maps API key
+                (<code className="text-xs">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>)
+                to the app&apos;s environment settings.
+              </p>
+            )}
+            {results.length === 0 && !searching && !searchUnavailable && (
               <p className="text-center py-4 text-sm text-ink-faint">
                 No restaurants found for &ldquo;{query}&rdquo;.
               </p>

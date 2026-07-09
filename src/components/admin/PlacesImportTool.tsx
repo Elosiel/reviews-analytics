@@ -62,6 +62,7 @@ export default function PlacesImportTool() {
   const [stateCode, setStateCode] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchUnavailable, setSearchUnavailable] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Queue + submit ──
@@ -97,6 +98,7 @@ export default function PlacesImportTool() {
     if (q.length < 3) {
       setResults(null);
       setSearching(false);
+      setSearchUnavailable(false);
       return;
     }
     const stateName = US_STATES.find(([code]) => code === stateVal)?.[1] ?? "";
@@ -106,8 +108,17 @@ export default function PlacesImportTool() {
       try {
         const res = await fetch(`/api/places/search?q=${encodeURIComponent(full)}`);
         const data = await res.json();
-        setResults(Array.isArray(data.places) ? data.places : []);
+        // The API returns `places: null` (not []) when the Google Maps key
+        // isn't configured — distinct from a genuine zero-result search.
+        if (data.places === null) {
+          setSearchUnavailable(true);
+          setResults([]);
+        } else {
+          setSearchUnavailable(false);
+          setResults(Array.isArray(data.places) ? data.places : []);
+        }
       } catch {
+        setSearchUnavailable(false);
         setResults([]);
       } finally {
         setSearching(false);
@@ -264,7 +275,12 @@ export default function PlacesImportTool() {
                 </button>
               );
             })}
-            {results.length === 0 && !searching && (
+            {results.length === 0 && !searching && searchUnavailable && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg text-center py-3 px-3">
+                Search isn&apos;t configured — add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to the environment.
+              </p>
+            )}
+            {results.length === 0 && !searching && !searchUnavailable && (
               <p className="text-sm text-zinc-400 text-center py-3">No restaurants found for “{query}”.</p>
             )}
           </div>
