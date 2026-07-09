@@ -30,6 +30,19 @@ export interface WeekSummary {
   worst: { category: SentimentCategory; location: string } | null;
 }
 
+// One row of the chronological "All reviews" tab. review_text/reviewer_name
+// are null once the source review passes its 30-day purge — the entry stays
+// (rating, date, location) but the verbatim text is gone by design.
+export interface ReviewListItem {
+  id: string;
+  location_id: string;
+  location_name: string;
+  star_rating: number;
+  review_text: string | null;
+  reviewer_name: string | null;
+  reviewed_at: string;
+}
+
 export interface DashboardData {
   hasRealData: boolean;
   locations: Location[];
@@ -41,6 +54,7 @@ export interface DashboardData {
   week: WeekSummary;
   groupTrend: TrendPoint[];
   trendsByCategory: Record<SentimentCategory, TrendPoint[]>;
+  reviews: ReviewListItem[];
 }
 
 function emptyMatrix(locations: Location[]): DashboardData["matrix"] {
@@ -67,7 +81,36 @@ function emptyData(): DashboardData {
     week: { new_reviews: 0, best: null, worst: null },
     groupTrend: [],
     trendsByCategory,
+    reviews: [],
   };
+}
+
+const REVIEW_LIST_LIMIT = 200;
+
+// Chronological review feed for the "All reviews" tab. This is a plain
+// listing (not an aggregate — scores still come only from rollups).
+async function fetchReviewList(
+  supabase: SupabaseClient,
+  locationIds: string[],
+  locationNames: Record<string, string>
+): Promise<ReviewListItem[]> {
+  if (locationIds.length === 0) return [];
+  const { data } = await supabase
+    .from("reviews")
+    .select("id, location_id, star_rating, review_text, reviewer_name, reviewed_at")
+    .in("location_id", locationIds)
+    .order("reviewed_at", { ascending: false })
+    .limit(REVIEW_LIST_LIMIT);
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    location_id: r.location_id,
+    location_name: locationNames[r.location_id] ?? "Unknown location",
+    star_rating: r.star_rating,
+    review_text: r.review_text,
+    reviewer_name: r.reviewer_name,
+    reviewed_at: r.reviewed_at,
+  }));
 }
 
 interface RollupRow {
@@ -340,7 +383,7 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
   const locationIds = locations.map((l) => l.id);
   const locationNames = Object.fromEntries(locations.map((l) => [l.id, l.name]));
 
-  const [rollups90, rollups30, rollups7Res, needsAttention, recovery, weekReviewCount] = await Promise.all([
+  const [rollups90, rollups30, rollups7Res, needsAttention, recovery, weekReviewCount, reviews] = await Promise.all([
     latestRollups(supabase, locationIds, 90),
     latestRollups(supabase, locationIds, 30),
     supabase
@@ -352,6 +395,7 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
     buildNeedsAttention(supabase),
     getRecovery(supabase),
     getWeekReviewCount(supabase, locationIds),
+    fetchReviewList(supabase, locationIds, locationNames),
   ]);
 
   const matrix = buildMatrixFromRollups(locations, rollups90);
@@ -389,5 +433,6 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
     week,
     groupTrend,
     trendsByCategory,
+    reviews,
   };
 }

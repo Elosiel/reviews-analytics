@@ -20,6 +20,7 @@ import type {
   MatrixCell,
   NeedsAttentionItem,
 } from "@/types";
+import type { ReviewListItem } from "@/lib/data/dashboard";
 
 // ── Restaurant profile (collected at onboarding, editable in Settings) ──
 // Recommendations below are written against this profile on purpose —
@@ -283,6 +284,50 @@ export const MOCK_NEEDS_ATTENTION: NeedsAttentionItem[] = [
     quote:
       "Both of us felt sick within hours of eating the shrimp special. Something was off.",
     reviewed_at: "2026-06-30T21:14:00Z",
+  },
+];
+
+// ── Chronological review feed (the "All reviews" tab, demo mode) ──
+export const MOCK_REVIEWS: ReviewListItem[] = [
+  {
+    id: "rev-m1", location_id: "loc-2", location_name: "Wynwood", star_rating: 1,
+    review_text: "Both of us felt sick within hours of eating the shrimp special. Something was off.",
+    reviewer_name: "Dana R.", reviewed_at: "2026-06-30T21:14:00Z",
+  },
+  {
+    id: "rev-m2", location_id: "loc-2", location_name: "Wynwood", star_rating: 2,
+    review_text: "Server forgot our order twice and never apologized.",
+    reviewer_name: "Marcus T.", reviewed_at: "2026-06-29T20:05:00Z",
+  },
+  {
+    id: "rev-m3", location_id: "loc-3", location_name: "Coral Gables", star_rating: 5,
+    review_text: "The vibe is unmatched — perfect for a date night. Best ceviche in Coral Gables, not even close.",
+    reviewer_name: "Elena V.", reviewed_at: "2026-06-28T19:40:00Z",
+  },
+  {
+    id: "rev-m4", location_id: "loc-1", location_name: "Downtown Miami", star_rating: 2,
+    review_text: "45-minute wait for a table with a reservation.",
+    reviewer_name: "Priya S.", reviewed_at: "2026-06-27T21:30:00Z",
+  },
+  {
+    id: "rev-m5", location_id: "loc-3", location_name: "Coral Gables", star_rating: 5,
+    review_text: "The tasting menu blew us away. Love the outdoor patio, so relaxing.",
+    reviewer_name: "James K.", reviewed_at: "2026-06-25T18:15:00Z",
+  },
+  {
+    id: "rev-m6", location_id: "loc-1", location_name: "Downtown Miami", star_rating: 4,
+    review_text: "Huge portions for the price. Happy hour deals are incredible.",
+    reviewer_name: "Sofia M.", reviewed_at: "2026-06-22T17:55:00Z",
+  },
+  {
+    id: "rev-m7", location_id: "loc-2", location_name: "Wynwood", star_rating: 3,
+    review_text: "Pasta was cold when it arrived. Portion sizes have definitely shrunk since last time.",
+    reviewer_name: "Leo B.", reviewed_at: "2026-06-20T20:45:00Z",
+  },
+  {
+    // Past the 30-day verbatim window — text purged, rating retained
+    id: "rev-m8", location_id: "loc-1", location_name: "Downtown Miami", star_rating: 4,
+    review_text: null, reviewer_name: null, reviewed_at: "2026-05-28T19:00:00Z",
   },
 ];
 

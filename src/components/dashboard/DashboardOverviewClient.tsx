@@ -19,11 +19,11 @@ import type {
   NeedsAttentionItem,
   DriftAlert,
 } from "@/types";
-import type { TrendPoint, WeekSummary } from "@/lib/data/dashboard";
+import type { ReviewListItem, TrendPoint, WeekSummary } from "@/lib/data/dashboard";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, CATEGORY_LABELS, fmtScore, scoreInk } from "@/lib/design";
 
-type TabId = "issues" | "loves" | "trends" | "recommendations";
+type TabId = "issues" | "loves" | "trends" | "recommendations" | "reviews";
 
 interface DashboardOverviewClientProps {
   locations: Location[];
@@ -35,6 +35,7 @@ interface DashboardOverviewClientProps {
   week: WeekSummary;
   groupTrend: TrendPoint[];
   trendsByCategory: Record<SentimentCategory, TrendPoint[]>;
+  reviews: ReviewListItem[];
 }
 
 export default function DashboardOverviewClient({
@@ -47,8 +48,10 @@ export default function DashboardOverviewClient({
   week,
   groupTrend,
   trendsByCategory,
+  reviews,
 }: DashboardOverviewClientProps) {
-  const [activeLocation, setActiveLocation] = useState<string>("all");
+  // Multi-select: empty = all locations; pills toggle membership
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<TabId>("issues");
   const [exportIssue, setExportIssue] = useState<RankedIssue | null>(null);
   const issuesRef = useRef<HTMLDivElement>(null);
@@ -86,22 +89,24 @@ export default function DashboardOverviewClient({
     "";
 
   function focusWeakestLink(locationId?: string) {
-    setActiveLocation(locationId ?? weakestLocation.id);
+    setSelectedLocations([locationId ?? weakestLocation.id]);
     setActiveTab("issues");
     issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const filteredIssues =
-    activeLocation === "all"
-      ? rankedIssues
-      : rankedIssues.filter((i) => i.location_id === activeLocation);
+  function toggleLocation(id: string) {
+    setSelectedLocations((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
 
-  const filteredLoves =
-    activeLocation === "all"
-      ? loves
-      : loves.filter((i) => i.location_id === activeLocation);
+  const matchesSelection = (locationId: string) =>
+    selectedLocations.length === 0 || selectedLocations.includes(locationId);
 
+  const filteredIssues = rankedIssues.filter((i) => matchesSelection(i.location_id));
+  const filteredLoves = loves.filter((i) => matchesSelection(i.location_id));
   const filteredRecommendations = filteredIssues.filter((i) => i.recommendation);
+  const filteredReviews = reviews.filter((r) => matchesSelection(r.location_id));
 
   const TABS = [
     { id: "issues" as TabId, label: "Fix these first", count: filteredIssues.length },
@@ -112,6 +117,7 @@ export default function DashboardOverviewClient({
       label: "Recommendations",
       count: filteredRecommendations.length,
     },
+    { id: "reviews" as TabId, label: "All reviews", count: filteredReviews.length },
   ];
 
   return (
@@ -186,6 +192,8 @@ export default function DashboardOverviewClient({
                       "text-[11px] font-semibold rounded-full px-1.5 py-0.5 tabular-nums",
                       tab.id === "issues"
                         ? "bg-[#fbeeea] text-neg"
+                        : tab.id === "reviews"
+                        ? "bg-line-soft text-ink-soft"
                         : "bg-[#eef6f1] text-pos"
                     )}
                   >
@@ -197,13 +205,13 @@ export default function DashboardOverviewClient({
           </div>
         </div>
 
-        {/* Location filter */}
+        {/* Location filter — multi-select: pick one, several, or all */}
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <button
-            onClick={() => setActiveLocation("all")}
+            onClick={() => setSelectedLocations([])}
             className={cn(
               "px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all",
-              activeLocation === "all"
+              selectedLocations.length === 0
                 ? "bg-forest text-paper border-forest"
                 : "bg-paper text-ink-soft border-line hover:border-ink-faint"
             )}
@@ -213,10 +221,10 @@ export default function DashboardOverviewClient({
           {locations.map((loc) => (
             <button
               key={loc.id}
-              onClick={() => setActiveLocation(loc.id)}
+              onClick={() => toggleLocation(loc.id)}
               className={cn(
                 "px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all",
-                activeLocation === loc.id
+                selectedLocations.includes(loc.id)
                   ? "bg-forest text-paper border-forest"
                   : "bg-paper text-ink-soft border-line hover:border-ink-faint"
               )}
@@ -248,13 +256,12 @@ export default function DashboardOverviewClient({
                 />
               ))
             )}
-            {recovery &&
-              (activeLocation === "all" || activeLocation === recovery.location_id) && (
-                <ProofOfImpactCard
-                  recovery={recovery}
-                  locationName={locationNames[recovery.location_id] ?? "your location"}
-                />
-              )}
+            {recovery && matchesSelection(recovery.location_id) && (
+              <ProofOfImpactCard
+                recovery={recovery}
+                locationName={locationNames[recovery.location_id] ?? "your location"}
+              />
+            )}
           </div>
         )}
 
@@ -330,6 +337,59 @@ export default function DashboardOverviewClient({
             issues={filteredIssues}
             onExport={setExportIssue}
           />
+        )}
+
+        {/* All reviews — the raw chronological feed */}
+        {activeTab === "reviews" && (
+          <div className="space-y-3">
+            {filteredReviews.length === 0 ? (
+              <p className="text-center py-12 text-sm text-ink-faint">
+                No reviews here yet.
+              </p>
+            ) : (
+              filteredReviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="bg-paper rounded-2xl border border-line px-5 py-4"
+                >
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-sm tracking-tight shrink-0" aria-label={`${review.star_rating} of 5 stars`}>
+                        <span className="text-gold">{"★".repeat(review.star_rating)}</span>
+                        <span className="text-line">{"★".repeat(5 - review.star_rating)}</span>
+                      </span>
+                      <span className="text-sm font-medium text-ink truncate">
+                        {review.reviewer_name ?? "Google user"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] font-medium bg-line-soft text-ink-soft rounded-full px-2.5 py-1">
+                        {review.location_name}
+                      </span>
+                      <span className="text-xs text-ink-faint tabular-nums">
+                        {new Date(review.reviewed_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          timeZone: "UTC",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                  {review.review_text ? (
+                    <p className="text-sm text-ink-soft leading-relaxed mt-2">
+                      &ldquo;{review.review_text}&rdquo;
+                    </p>
+                  ) : (
+                    <p className="text-xs text-ink-faint italic mt-2">
+                      Verbatim text no longer available — outside the 30-day window.
+                      Rating and category scores are retained.
+                    </p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 
