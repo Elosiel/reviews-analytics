@@ -55,7 +55,10 @@ export interface Review {
   tenant_id: string;
   location_id: string;
   external_review_id: string;  // Google review id
-  source: "google";
+  // "google_places_temp" = TEMPORARY bridge via Places API while GBP read
+  // access is pending approval (src/app/api/reviews/import-places). Remove
+  // this variant once /api/reviews/sync is the only ingest path.
+  source: "google" | "google_places_temp";
   star_rating: number;         // 1–5
   review_text: string | null;  // null after 30-day purge
   reviewer_name: string | null;// null after 30-day purge
