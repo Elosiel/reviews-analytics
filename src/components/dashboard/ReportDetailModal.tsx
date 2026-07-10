@@ -1,13 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { X, Download, Mail, TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
+import { X, Download, Mail, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
 import { downloadWeeklyReportPdf } from "@/lib/pdf/weekly-report-pdf";
 import { openGmailDraft } from "@/lib/email-draft";
-import type { WeeklyReport, ReportQuoteSnapshot, ReportTheme } from "@/types";
+import type { DangerFlag, WeeklyReport, ReportQuoteSnapshot, ReportTheme } from "@/types";
 import { cn } from "@/lib/utils";
+
+const FLAG_LABELS: Record<DangerFlag, string> = {
+  health_safety: "Health & safety",
+  legal: "Legal",
+  discrimination: "Discrimination",
+  physical_safety: "Physical safety",
+};
 
 function fmtDate(dateStr: string): string {
   return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -81,7 +88,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
   const [emailNote, setEmailNote] = useState(false);
 
   function handleEmailDraft() {
-    openGmailDraft(report);
+    openGmailDraft(report, quotes);
     setEmailNote(true);
   }
 
@@ -110,6 +117,50 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
 
         {/* Body */}
         <div className="px-6 py-5 space-y-6 overflow-y-auto">
+          {/* Danger flags — loudest element in the report, same as the dashboard */}
+          {report.needs_attention.length > 0 && (
+            <div className="space-y-2">
+              {report.needs_attention.map((item) => {
+                const itemQuote = quotes.find(
+                  (q) => q.theme_kind === "danger" && q.review_id === item.review_id
+                );
+                return (
+                  <div
+                    key={item.review_id}
+                    className="rounded-2xl border-2 border-neg/40 bg-[#fbeeea] p-5 flex items-start gap-4"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-neg flex items-center justify-center shrink-0">
+                      <ShieldAlert className="w-4.5 h-4.5 text-paper" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-heading text-base font-semibold text-[#7a1f13]">
+                          Needs your attention today
+                        </span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide bg-neg text-paper rounded-full px-2 py-0.5">
+                          {FLAG_LABELS[item.flag]}
+                        </span>
+                        <span className="text-xs text-ink-faint">
+                          {item.location_name} · {item.star_rating}★
+                        </span>
+                      </div>
+                      {itemQuote?.quote_text && (
+                        <blockquote className="mt-2 text-sm text-[#66261a] italic border-l-2 border-neg/40 pl-3">
+                          &ldquo;{itemQuote.quote_text}&rdquo;
+                        </blockquote>
+                      )}
+                      <p className="mt-2 text-xs text-[#8a5347]">
+                        A guest reported a possible {FLAG_LABELS[item.flag].toLowerCase()} issue.
+                        Review it with your manager before tonight&apos;s service — these are flagged
+                        no matter which category they fall under.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Executive summary */}
           <div>
             <p className="text-[11px] font-medium text-ink-faint uppercase tracking-[0.14em] mb-2">
@@ -156,7 +207,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
           </div>
 
           <ThemeSection title="What's Going Well" themes={report.good_themes} quotes={quotes} tone="good" />
-          <ThemeSection title="What Needs Attention" themes={report.bad_themes} quotes={quotes} tone="bad" />
+          <ThemeSection title="What's Not Working" themes={report.bad_themes} quotes={quotes} tone="bad" />
 
           {/* Recommended actions */}
           {report.recommended_actions.length > 0 && (
@@ -197,7 +248,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
               <Mail className="w-4 h-4" /> Email draft
             </Button>
             <Button
-              onClick={() => downloadWeeklyReportPdf(report)}
+              onClick={() => downloadWeeklyReportPdf(report, quotes)}
               className="flex-1 bg-forest hover:bg-forest-soft text-paper gap-2"
             >
               <Download className="w-4 h-4" /> Download PDF

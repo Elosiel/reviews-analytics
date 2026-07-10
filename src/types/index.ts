@@ -239,11 +239,13 @@ export interface MatrixCell {
 }
 
 // Danger flag: surfaced regardless of category (spec rule 6)
+export type DangerFlag = "health_safety" | "legal" | "discrimination" | "physical_safety";
+
 export interface NeedsAttentionItem {
   id: string;
   location_id: string;
   location_name: string;
-  flag: "health_safety" | "legal" | "discrimination" | "physical_safety";
+  flag: DangerFlag;
   star_rating: number;
   quote: string;
   reviewed_at: string;
@@ -382,19 +384,38 @@ export interface WeeklyReport {
   location_rankings: ReportLocationRanking[];
   recommended_actions: ReportAction[];
   ai_generated: boolean;        // false = deterministic fallback (no ANTHROPIC_API_KEY, or Claude failed)
+  // Danger-flag reviews (health/safety, legal, discrimination, physical
+  // safety) from this period, surfaced regardless of category (spec rule
+  // 6) — same as the dashboard's NeedsAttentionBanner. Metadata only; the
+  // verbatim quote lives in report_quote_snapshots (theme_kind "danger")
+  // so it stays subject to the 30-day purge, same as everything else.
+  needs_attention: ReportNeedsAttentionItem[];
   generated_at: string;
   created_by: string | null;
 }
 
-// Evidence quote backing a report's good/bad theme. quote_text is null
-// after content_purge_at (copied from the source review — not a fresh
-// timer), same semantics as MeetingQuoteSnapshot / SopEvidenceQuote.
+export interface ReportNeedsAttentionItem {
+  review_id: string;   // not purge-sensitive itself — just used to match the quote snapshot below
+  location_id: string;
+  location_name: string;
+  flag: DangerFlag;
+  star_rating: number;
+  reviewed_at: string;
+}
+
+// Evidence quote backing a report's good/bad theme, or a danger-flag
+// alert. quote_text is null after content_purge_at (copied from the
+// source review — not a fresh timer), same semantics as
+// MeetingQuoteSnapshot / SopEvidenceQuote. For theme_kind "good"/"bad",
+// category is set and flag is null; for "danger", flag is set and
+// category is null (danger flags aren't tied to the sentiment taxonomy).
 export interface ReportQuoteSnapshot {
   id: string;
   tenant_id: string;
   report_id: string;
-  theme_kind: "good" | "bad";
-  category: SentimentCategory;
+  theme_kind: "good" | "bad" | "danger";
+  category: SentimentCategory | null;
+  flag: DangerFlag | null;
   review_id: string | null;
   location_id: string | null;
   location_name: string;

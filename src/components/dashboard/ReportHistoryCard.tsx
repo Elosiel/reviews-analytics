@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, CalendarDays, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ChevronRight, CalendarDays, TrendingUp, TrendingDown, Minus, ShieldAlert } from "lucide-react";
 import { fmtScore } from "@/lib/design";
 import type { WeeklyReport } from "@/types";
 
@@ -27,13 +27,23 @@ export default function ReportHistoryCard({ report, onOpen }: ReportHistoryCardP
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left bg-paper rounded-2xl border border-line p-5 hover:border-ink-faint transition-all"
+      className={`w-full text-left bg-paper rounded-2xl border p-5 transition-all hover:border-ink-faint ${
+        report.needs_attention.length > 0 ? "border-neg/30" : "border-line"
+      }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1.5">
-          <p className="font-heading text-base font-semibold text-ink">
-            {fmtDate(report.period_start)} – {fmtDate(report.period_end)}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-heading text-base font-semibold text-ink">
+              {fmtDate(report.period_start)} – {fmtDate(report.period_end)}
+            </p>
+            {report.needs_attention.length > 0 && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide bg-neg text-paper rounded-full px-2 py-0.5">
+                <ShieldAlert className="w-3 h-3" />
+                {report.needs_attention.length} needs attention
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 flex-wrap text-xs text-ink-faint">
             <span className="flex items-center gap-1">
               <CalendarDays className="w-3 h-3" />

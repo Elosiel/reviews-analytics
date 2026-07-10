@@ -741,6 +741,16 @@ export const MOCK_REPORTS: WeeklyReport[] = [
         location_name: "Coral Gables",
       },
     ],
+    needs_attention: [
+      {
+        review_id: "rev-8",
+        location_id: "loc-2",
+        location_name: "Wynwood",
+        flag: "health_safety",
+        star_rating: 1,
+        reviewed_at: "2026-06-30T21:14:00Z",
+      },
+    ],
     ai_generated: true,
     generated_at: "2026-07-06T15:45:00Z",
     created_by: "user-1",
@@ -753,40 +763,46 @@ export const MOCK_REPORTS: WeeklyReport[] = [
 export const MOCK_REPORT_QUOTES: Record<string, ReportQuoteSnapshot[]> = {
   "report-1": [
     {
-      id: "rq-1", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "atmosphere",
+      id: "rq-1", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "atmosphere", flag: null,
       review_id: "rev-3", location_id: "loc-3", location_name: "Coral Gables",
       quote_text: "The vibe is unmatched — perfect for a date night. Love the outdoor patio, so relaxing.",
       star_rating: 5, reviewed_at: "2026-06-28T19:40:00Z", content_purge_at: "2026-07-28T19:40:00Z",
     },
     {
-      id: "rq-2", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "food",
+      id: "rq-2", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "food", flag: null,
       review_id: "rev-5", location_id: "loc-3", location_name: "Coral Gables",
       quote_text: "The tasting menu blew us away.",
       star_rating: 5, reviewed_at: "2026-06-25T18:15:00Z", content_purge_at: "2026-07-25T18:15:00Z",
     },
     {
-      id: "rq-3", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "value",
+      id: "rq-3", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "value", flag: null,
       review_id: "rev-6", location_id: "loc-1", location_name: "Downtown Miami",
       quote_text: "Huge portions for the price. Happy hour deals are incredible.",
       star_rating: 4, reviewed_at: "2026-06-22T17:55:00Z", content_purge_at: "2026-07-22T17:55:00Z",
     },
     {
-      id: "rq-4", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "service",
+      id: "rq-4", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "service", flag: null,
       review_id: "rev-1", location_id: "loc-2", location_name: "Wynwood",
       quote_text: "Server forgot our order twice and never apologized.",
       star_rating: 2, reviewed_at: "2026-07-01T20:00:00Z", content_purge_at: "2026-07-31T20:00:00Z",
     },
     {
-      id: "rq-5", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "wait_time",
+      id: "rq-5", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "wait_time", flag: null,
       review_id: "rev-2", location_id: "loc-1", location_name: "Downtown Miami",
       quote_text: "45-minute wait for a table with a reservation.",
       star_rating: 2, reviewed_at: "2026-07-02T19:30:00Z", content_purge_at: "2026-08-01T19:30:00Z",
     },
     {
-      id: "rq-6", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "food",
+      id: "rq-6", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "food", flag: null,
       review_id: "rev-7", location_id: "loc-2", location_name: "Wynwood",
       quote_text: "Pasta was cold when it arrived. Portion sizes have definitely shrunk since last time.",
       star_rating: 3, reviewed_at: "2026-06-20T20:45:00Z", content_purge_at: "2026-07-20T20:45:00Z",
+    },
+    {
+      id: "rq-7", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "danger", category: null, flag: "health_safety",
+      review_id: "rev-8", location_id: "loc-2", location_name: "Wynwood",
+      quote_text: "Both of us felt sick within hours of eating the shrimp special. Something was off.",
+      star_rating: 1, reviewed_at: "2026-06-30T21:14:00Z", content_purge_at: "2026-07-30T21:14:00Z",
     },
   ],
 };

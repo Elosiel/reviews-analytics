@@ -28,7 +28,9 @@ import {
   type ReportSourceTheme,
 } from "@/lib/pipeline/claude";
 import type {
+  DangerFlag,
   ReportLocationRanking,
+  ReportNeedsAttentionItem,
   ReportQuoteSnapshot,
   ReportTheme,
   ReportTrend,
@@ -44,6 +46,7 @@ const QUOTE_MAX_CHARS = 240;
 const THEME_MIN_MENTIONS = 2;   // a single mention isn't a "recurring" pattern
 const THEME_SCORE_CUTOFF = 0.15; // how clearly positive/negative a category must lean to count as a theme
 const TREND_FLAT_BAND = 0.05;   // |delta| below this reads as "flat", not improving/declining
+const MAX_NEEDS_ATTENTION = 10;  // same cap as the dashboard's NeedsAttentionBanner query
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -300,6 +303,48 @@ export async function POST() {
     location_names: themeLocationNames(c.rows),
   }));
 
+  // ── Danger flags — surfaced regardless of category (spec rule 6) ────
+  // Same query shape as buildNeedsAttention() in lib/data/dashboard.ts,
+  // scoped to this period + these locations. Health/safety > legal >
+  // discrimination > physical_safety mirrors that same priority order
+  // when a single review trips more than one flag.
+  const { data: dangerRowsRaw } = await supabase
+    .from("review_analyses")
+    .select(`
+      flag_health_safety, flag_legal, flag_discrimination, flag_physical_safety,
+      reviews!inner(id, star_rating, review_text, reviewed_at, content_purge_at, location_id)
+    `)
+    .eq("needs_attention", true)
+    .in("reviews.location_id", locationIds)
+    .not("reviews.review_text", "is", null)
+    .gte("reviews.reviewed_at", startOfDayIso(periodStart))
+    .lte("reviews.reviewed_at", endOfDayIso(periodEnd))
+    .order("reviews(reviewed_at)", { ascending: false })
+    .limit(MAX_NEEDS_ATTENTION);
+
+  interface DangerRow {
+    flag_health_safety: boolean;
+    flag_legal: boolean;
+    flag_discrimination: boolean;
+    flag_physical_safety: boolean;
+    reviews: JoinedReview;
+  }
+  function flagFor(row: DangerRow): DangerFlag {
+    if (row.flag_health_safety) return "health_safety";
+    if (row.flag_legal) return "legal";
+    if (row.flag_discrimination) return "discrimination";
+    return "physical_safety";
+  }
+  const dangerRows = (dangerRowsRaw ?? []) as unknown as DangerRow[];
+  const needsAttentionFinal: ReportNeedsAttentionItem[] = dangerRows.map((row) => ({
+    review_id: row.reviews.id,
+    location_id: row.reviews.location_id,
+    location_name: locationNames.get(row.reviews.location_id) ?? "Unknown location",
+    flag: flagFor(row),
+    star_rating: row.reviews.star_rating,
+    reviewed_at: row.reviews.reviewed_at,
+  }));
+
   // ── Restaurant profile context ──────────────────────────────────────
   const { data: profileCtx } = await supabase
     .from("tenant_profiles")
@@ -386,6 +431,7 @@ export async function POST() {
       bad_themes: badThemesFinal,
       location_rankings: locationRankingsFinal,
       recommended_actions: narrative.recommended_actions,
+      needs_attention: needsAttentionFinal,
       ai_generated: aiGenerated,
       created_by: user.id,
     })
@@ -428,6 +474,7 @@ export async function POST() {
           report_id: report.id,
           theme_kind: kind,
           category: t.category,
+          flag: null,
           review_id: row.reviews.id,
           location_id: row.reviews.location_id,
           location_name: locationNames.get(row.reviews.location_id) ?? "Unknown location",
@@ -441,6 +488,25 @@ export async function POST() {
   }
   collectQuotes(goodCategoryStats, "good");
   collectQuotes(badCategoryStats, "bad");
+
+  // Danger-flag quotes — one per flagged review, never trimmed of variety
+  // since every one of these deserves a manager's eyes.
+  for (const row of dangerRows) {
+    quoteRows.push({
+      tenant_id: tenantId as string,
+      report_id: report.id,
+      theme_kind: "danger",
+      category: null,
+      flag: flagFor(row),
+      review_id: row.reviews.id,
+      location_id: row.reviews.location_id,
+      location_name: locationNames.get(row.reviews.location_id) ?? "Unknown location",
+      quote_text: snippet(row.reviews.review_text!),
+      star_rating: row.reviews.star_rating,
+      reviewed_at: row.reviews.reviewed_at,
+      content_purge_at: row.reviews.content_purge_at,
+    });
+  }
 
   if (quoteRows.length > 0) {
     await supabase.from("report_quote_snapshots").insert(quoteRows);
