@@ -512,21 +512,31 @@ $$;
 create policy "own profile" on public.profiles for all
   using (auth.uid() = id);
 
--- All tenant-scoped tables use the same pattern: tenant_id = session variable
-create policy "tenant isolation" on public.google_tokens     for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.locations         for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.reviews           for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.review_analyses   for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.review_categories for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.category_rollups  for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.drift_alerts      for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.digest_log        for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.sops                    for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.sop_evidence_quotes     for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.meetings                for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.meeting_quote_snapshots for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.weekly_reports          for all using (tenant_id = public.current_tenant_id());
-create policy "tenant isolation" on public.report_quote_snapshots  for all using (tenant_id = public.current_tenant_id());
+-- Every tenant-scoped table accepts EITHER tenant key:
+--   - auth_tenant_id() — derived from the logged-in user's JWT (auth.uid()).
+--     This is what the standard anon+JWT client uses, i.e. every request
+--     that comes from the browser or an SSR route handler via
+--     lib/supabase/server.ts — that client can't set a per-request
+--     session variable, so app.current_tenant_id is never populated there.
+--   - current_tenant_id() — the session variable set by SELECT set_tenant(),
+--     used by service-role/cron jobs (purge, rollup, digest, sync) that run
+--     their own transaction across every tenant.
+-- Both must be present or user-facing routes (meetings, SOPs, weekly
+-- reports, etc.) get silently blocked by RLS on every write.
+create policy "tenant isolation" on public.google_tokens     for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.locations         for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.reviews           for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.review_analyses   for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.review_categories for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.category_rollups  for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.drift_alerts      for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.digest_log        for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.sops                    for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.sop_evidence_quotes     for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.meetings                for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.meeting_quote_snapshots for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.weekly_reports          for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
+create policy "tenant isolation" on public.report_quote_snapshots  for all using (tenant_id = public.auth_tenant_id() or tenant_id = public.current_tenant_id());
 
 -- ─────────────────────────────────────────────────────────────────
 -- TRIGGERS & AUTO-JOBS
