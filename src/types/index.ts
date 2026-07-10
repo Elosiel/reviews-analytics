@@ -326,6 +326,84 @@ export interface MeetingQuoteSnapshot {
   content_purge_at: string;
 }
 
+// ── Weekly Reports ────────────────────────────────────────────────
+// Manager-triggered ("Generate weekly report" button), no auto-send in
+// v1 — mirrors the Meetings/SOPs on-demand pattern. Compares the last
+// 7 days against the prior 7 days by default. Executive summary, theme
+// descriptions, location verdicts, and recommended actions are all
+// paraphrased analysis grounded in review_categories/reviews and are
+// retained indefinitely (same split as meetings.agenda and sops.content).
+// Verbatim evidence quotes live separately in report_quote_snapshots so
+// they carry their own 30-day purge clock inherited from the source
+// review, never a fresh timer.
+export type ReportTrend = "improving" | "declining" | "flat";
+
+// A recurring pattern grounded in the fixed category taxonomy — never a
+// free-form label, so themes stay comparable across reviews and reports.
+export interface ReportTheme {
+  category: SentimentCategory;
+  theme: string;          // short specific label, e.g. "Fast table turnover"
+  description: string;    // 1-2 sentences, grounded in the mentions below
+  mention_count: number;
+  avg_sentiment_score: number;
+  location_names: string[]; // locations most driving this theme
+}
+
+export interface ReportLocationRanking {
+  location_id: string;
+  location_name: string;
+  rank: number;
+  verdict: string;              // one-line, e.g. "Strongest week yet — atmosphere carrying the group."
+  composite_score: number;      // mention-weighted avg sentiment, current period
+  review_count: number;
+  avg_rating: number | null;
+  trend: ReportTrend;
+  trend_basis: string;          // e.g. "vs prior 7-day period" or a within-period heuristic note
+}
+
+export interface ReportAction {
+  title: string;
+  detail: string;
+  category: SentimentCategory | null;
+  location_name: string | null;
+}
+
+export interface WeeklyReport {
+  id: string;
+  tenant_id: string;
+  period_start: string;         // date
+  period_end: string;           // date
+  prior_period_start: string | null;
+  prior_period_end: string | null;
+  has_prior_period: boolean;    // false = not enough history yet for a real trend
+  executive_summary: string;
+  good_themes: ReportTheme[];
+  bad_themes: ReportTheme[];
+  location_rankings: ReportLocationRanking[];
+  recommended_actions: ReportAction[];
+  ai_generated: boolean;        // false = deterministic fallback (no ANTHROPIC_API_KEY, or Claude failed)
+  generated_at: string;
+  created_by: string | null;
+}
+
+// Evidence quote backing a report's good/bad theme. quote_text is null
+// after content_purge_at (copied from the source review — not a fresh
+// timer), same semantics as MeetingQuoteSnapshot / SopEvidenceQuote.
+export interface ReportQuoteSnapshot {
+  id: string;
+  tenant_id: string;
+  report_id: string;
+  theme_kind: "good" | "bad";
+  category: SentimentCategory;
+  review_id: string | null;
+  location_id: string | null;
+  location_name: string;
+  quote_text: string | null;
+  star_rating: number | null;
+  reviewed_at: string | null;
+  content_purge_at: string;
+}
+
 // ── API shapes ────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {

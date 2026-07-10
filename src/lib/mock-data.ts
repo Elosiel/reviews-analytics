@@ -19,6 +19,8 @@ import type {
   MeetingQuoteSnapshot,
   MatrixCell,
   NeedsAttentionItem,
+  WeeklyReport,
+  ReportQuoteSnapshot,
 } from "@/types";
 import type { ReviewListItem } from "@/lib/data/dashboard";
 
@@ -598,6 +600,193 @@ export const MOCK_MEETING_QUOTES: Record<string, MeetingQuoteSnapshot[]> = {
       review_id: "rev-4", location_id: "loc-2", location_name: "Wynwood",
       category: "service", quote_text: "Waited 20 minutes before anyone acknowledged us.",
       star_rating: 2, reviewed_at: "2026-06-25T20:15:00Z", content_purge_at: "2026-07-25T20:15:00Z",
+    },
+  ],
+};
+
+// ── Weekly reports — on-demand, manager-generated, saved to history ──
+// One sample report telling the same Miami-group story as the rest of
+// the demo data: Coral Gables is the clear leader, Downtown just turned
+// its food problem around but wait times are slipping, Wynwood is the
+// weak link on service. Composite scores are the mention-weighted
+// average sentiment across all six categories, same math the real
+// /api/reports/generate route uses.
+export const MOCK_REPORTS: WeeklyReport[] = [
+  {
+    id: "report-1",
+    tenant_id: "tenant-1",
+    period_start: "2026-06-30",
+    period_end: "2026-07-06",
+    prior_period_start: "2026-06-23",
+    prior_period_end: "2026-06-29",
+    has_prior_period: true,
+    executive_summary:
+      "Coral Gables carried the group again this week at +0.48 composite sentiment, with atmosphere and food both landing well above the rest of the portfolio. Downtown Miami's hot-plate fix is holding — food sentiment is up sharply since May — but reservation waits are now the location's biggest liability. Wynwood remains the group's weak link: service complaints (34 mentions, −0.72) are dragging the location into negative territory overall, and it hasn't shown any recovery yet. Fixing Wynwood's greet-and-attentiveness problem is the single highest-leverage move available this week.",
+    good_themes: [
+      {
+        category: "atmosphere",
+        theme: "Outdoor patio driving repeat date-night visits",
+        description:
+          "Guests consistently called out the patio and overall vibe as a reason to come back, especially for date nights — the strongest, most consistent theme across the group this week.",
+        mention_count: 67,
+        avg_sentiment_score: 0.81,
+        location_names: ["Coral Gables"],
+      },
+      {
+        category: "food",
+        theme: "Ceviche and tasting menu praised by name",
+        description:
+          "Guests specifically named the ceviche and tasting menu unprompted — a strong signal the kitchen is exceeding expectations, not just meeting them.",
+        mention_count: 52,
+        avg_sentiment_score: 0.74,
+        location_names: ["Coral Gables"],
+      },
+      {
+        category: "value",
+        theme: "Happy hour seen as a standout deal",
+        description:
+          "Portion size and happy hour pricing were repeatedly called out as generous for the price point, reinforcing the group's value positioning.",
+        mention_count: 31,
+        avg_sentiment_score: 0.62,
+        location_names: ["Downtown Miami"],
+      },
+    ],
+    bad_themes: [
+      {
+        category: "service",
+        theme: "Slow greets and inattentive tables at Wynwood",
+        description:
+          "Guests describe being seated and then ignored, with servers forgetting orders and no apology when things went wrong — a first-impression problem, not a one-off.",
+        mention_count: 34,
+        avg_sentiment_score: -0.72,
+        location_names: ["Wynwood"],
+      },
+      {
+        category: "wait_time",
+        theme: "Reservations not honored at Downtown",
+        description:
+          "Guests with reservations are still waiting up to 45 minutes to be seated, which reads as the booking matrix overselling peak slots rather than a true capacity problem.",
+        mention_count: 28,
+        avg_sentiment_score: -0.58,
+        location_names: ["Downtown Miami"],
+      },
+      {
+        category: "food",
+        theme: "Cold plates and shrinking portions at Wynwood",
+        description:
+          "The same pass-timing issue Downtown solved in May is showing up at Wynwood now — plates arriving cold and portions perceived as smaller than before.",
+        mention_count: 21,
+        avg_sentiment_score: -0.44,
+        location_names: ["Wynwood"],
+      },
+    ],
+    location_rankings: [
+      {
+        location_id: "loc-3",
+        location_name: "Coral Gables",
+        rank: 1,
+        verdict: "Strongest location in the group — atmosphere and food both carrying it comfortably into positive territory.",
+        composite_score: 0.48,
+        review_count: 41,
+        avg_rating: 4.6,
+        trend: "improving",
+        trend_basis: "vs the prior 7-day period",
+      },
+      {
+        location_id: "loc-1",
+        location_name: "Downtown Miami",
+        rank: 2,
+        verdict: "Recovering on food, but reservation waits are now the location's top complaint and need attention this week.",
+        composite_score: 0.14,
+        review_count: 33,
+        avg_rating: 4.2,
+        trend: "flat",
+        trend_basis: "vs the prior 7-day period",
+      },
+      {
+        location_id: "loc-2",
+        location_name: "Wynwood",
+        rank: 3,
+        verdict: "The group's weak link — service complaints are dragging overall sentiment negative with no sign of recovery yet.",
+        composite_score: -0.14,
+        review_count: 19,
+        avg_rating: 3.8,
+        trend: "declining",
+        trend_basis: "vs the prior 7-day period",
+      },
+    ],
+    recommended_actions: [
+      {
+        title: "Roll out a 90-second greet standard at Wynwood",
+        detail: "34 service mentions averaging −0.72 this week, all pointing at slow or missed greets — put a floor lead on Friday and Saturday and start the greet drill in Tuesday's pre-shift.",
+        category: "service",
+        location_name: "Wynwood",
+      },
+      {
+        title: "Audit Downtown's Friday reservation book against real turn times",
+        detail: "28 mentions of unhonored reservations this week (−0.58) — have the host stand cross-check the 7–8pm slot before doors open rather than double-seating on hope.",
+        category: "wait_time",
+        location_name: "Downtown Miami",
+      },
+      {
+        title: "Extend the hot-plate pass standard to Wynwood",
+        detail: "The same cold-plate pattern that Downtown fixed in May (21 mentions, −0.44) is now showing up at Wynwood — borrow the existing SOP before considering menu changes.",
+        category: "food",
+        location_name: "Wynwood",
+      },
+      {
+        title: "Document what's working at Coral Gables before scaling it",
+        detail: "Atmosphere and food are both driving repeat visits there (+0.81, +0.74) — write down what the patio setup and kitchen pass are doing differently so it can inform the other two locations.",
+        category: null,
+        location_name: "Coral Gables",
+      },
+    ],
+    ai_generated: true,
+    generated_at: "2026-07-06T15:45:00Z",
+    created_by: "user-1",
+  },
+];
+
+// Evidence quotes behind each saved report's themes — same purge
+// semantics as MOCK_MEETING_QUOTES/MOCK_SOP_EVIDENCE, keyed here by
+// report id for the demo's detail view.
+export const MOCK_REPORT_QUOTES: Record<string, ReportQuoteSnapshot[]> = {
+  "report-1": [
+    {
+      id: "rq-1", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "atmosphere",
+      review_id: "rev-3", location_id: "loc-3", location_name: "Coral Gables",
+      quote_text: "The vibe is unmatched — perfect for a date night. Love the outdoor patio, so relaxing.",
+      star_rating: 5, reviewed_at: "2026-06-28T19:40:00Z", content_purge_at: "2026-07-28T19:40:00Z",
+    },
+    {
+      id: "rq-2", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "food",
+      review_id: "rev-5", location_id: "loc-3", location_name: "Coral Gables",
+      quote_text: "The tasting menu blew us away.",
+      star_rating: 5, reviewed_at: "2026-06-25T18:15:00Z", content_purge_at: "2026-07-25T18:15:00Z",
+    },
+    {
+      id: "rq-3", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "good", category: "value",
+      review_id: "rev-6", location_id: "loc-1", location_name: "Downtown Miami",
+      quote_text: "Huge portions for the price. Happy hour deals are incredible.",
+      star_rating: 4, reviewed_at: "2026-06-22T17:55:00Z", content_purge_at: "2026-07-22T17:55:00Z",
+    },
+    {
+      id: "rq-4", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "service",
+      review_id: "rev-1", location_id: "loc-2", location_name: "Wynwood",
+      quote_text: "Server forgot our order twice and never apologized.",
+      star_rating: 2, reviewed_at: "2026-07-01T20:00:00Z", content_purge_at: "2026-07-31T20:00:00Z",
+    },
+    {
+      id: "rq-5", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "wait_time",
+      review_id: "rev-2", location_id: "loc-1", location_name: "Downtown Miami",
+      quote_text: "45-minute wait for a table with a reservation.",
+      star_rating: 2, reviewed_at: "2026-07-02T19:30:00Z", content_purge_at: "2026-08-01T19:30:00Z",
+    },
+    {
+      id: "rq-6", tenant_id: "tenant-1", report_id: "report-1", theme_kind: "bad", category: "food",
+      review_id: "rev-7", location_id: "loc-2", location_name: "Wynwood",
+      quote_text: "Pasta was cold when it arrived. Portion sizes have definitely shrunk since last time.",
+      star_rating: 3, reviewed_at: "2026-06-20T20:45:00Z", content_purge_at: "2026-07-20T20:45:00Z",
     },
   ],
 };
