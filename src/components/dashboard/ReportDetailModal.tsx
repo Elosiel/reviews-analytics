@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { X, Download, Mail, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
+import { X, Printer, Mail, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
-import { downloadWeeklyReportPdf } from "@/lib/pdf/weekly-report-pdf";
+import { printWeeklyReport } from "@/lib/reports/weekly-report-html";
 import { openGmailDraft } from "@/lib/email-draft";
 import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import ReportCategoryHeatmap from "@/components/dashboard/ReportCategoryHeatmap";
@@ -239,7 +239,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
         <div className="px-6 pb-6 pt-4 border-t border-line-soft">
           {emailNote && (
             <p className="text-xs text-ink-faint mb-3 text-center">
-              Gmail is open in a new tab. It can&apos;t attach files automatically, so download the PDF below and attach it yourself before sending.
+              Gmail is open in a new tab. It can&apos;t attach files automatically, so print the PDF below and attach it yourself before sending.
             </p>
           )}
           <div className="flex gap-2">
@@ -247,10 +247,10 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
               <Mail className="w-4 h-4" /> Email draft
             </Button>
             <Button
-              onClick={() => downloadWeeklyReportPdf(report, quotes)}
+              onClick={() => printWeeklyReport(report, quotes)}
               className="flex-1 bg-forest hover:bg-forest-soft text-paper gap-2"
             >
-              <Download className="w-4 h-4" /> Download PDF
+              <Printer className="w-4 h-4" /> Print / PDF
             </Button>
           </div>
         </div>

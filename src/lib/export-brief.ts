@@ -26,15 +26,20 @@ export async function copyBriefText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
-/** Opens a popup window with the given title + body HTML and triggers print. */
-export function openPrintWindow(title: string, bodyHtml: string): void {
+/**
+ * Opens a popup window with the given title + body HTML and triggers
+ * print. Callers can supply their own stylesheet (e.g. one that mirrors
+ * a specific in-app view more closely than the default brief look) via
+ * `styles` — defaults to BRIEF_STYLES so existing callers are unaffected.
+ */
+export function openPrintWindow(title: string, bodyHtml: string, styles: string = BRIEF_STYLES): void {
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(`
     <html>
       <head>
         <title>${title}</title>
-        <style>${BRIEF_STYLES}</style>
+        <style>${styles}</style>
       </head>
       <body>
         ${bodyHtml}
