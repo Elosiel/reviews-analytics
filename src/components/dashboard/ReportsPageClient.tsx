@@ -78,7 +78,7 @@ export default function ReportsPageClient({ initialReports, demo }: ReportsPageC
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-ink-faint font-medium">Reports</p>
           <h1 className="font-heading text-[28px] leading-snug font-semibold text-ink mt-1.5">
-            The health of your business, in one page.
+            The health of your business, in one report.
           </h1>
           <p className="text-sm text-ink-soft mt-2 leading-relaxed">
             Compares the last 7 days against the prior period — what&apos;s going well, what&apos;s not, how every
