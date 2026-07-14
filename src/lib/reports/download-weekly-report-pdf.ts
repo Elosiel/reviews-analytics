@@ -115,29 +115,43 @@ export async function downloadWeeklyReportPdf(
     // Top-level template blocks: header, note, danger cards, sections, footer.
     // A block taller than a page pre-splits into its children (section label +
     // individual cards) so pagination can break between cards.
+    //
+    // IMPORTANT: elements inside the iframe belong to the iframe's JS realm,
+    // so `el instanceof HTMLElement` (this window's class) is ALWAYS false
+    // for them — a cross-realm instanceof check here once filtered out every
+    // section and produced a blank PDF. Filter by measured height instead;
+    // `.children` only ever contains elements.
     const pxToPt = (px: number, elWidthPx: number) => px * (CONTENT_W / elWidthPx);
-    const topLevel = Array.from(doc.body.children).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement && el.offsetHeight > 0
-    );
+    const visibleChildren = (parent: Element): HTMLElement[] =>
+      Array.from(parent.children).filter(
+        (el): el is HTMLElement => ((el as HTMLElement).offsetHeight ?? 0) > 0
+      );
+
+    const topLevel = visibleChildren(doc.body);
     const captureTargets: HTMLElement[] = [];
     for (const el of topLevel) {
       const hPt = pxToPt(el.offsetHeight, el.offsetWidth);
-      const children = Array.from(el.children).filter(
-        (c): c is HTMLElement => c instanceof HTMLElement && c.offsetHeight > 0
-      );
+      const children = visibleChildren(el);
       if (hPt > CONTENT_H && children.length > 1) captureTargets.push(...children);
       else captureTargets.push(el);
+    }
+    if (captureTargets.length === 0) {
+      // Fail loudly — a blank file must never masquerade as a successful export.
+      throw new Error("Report export rendered no content");
     }
 
     const canvases: HTMLCanvasElement[] = [];
     for (const el of captureTargets) {
-      canvases.push(
-        await html2canvas(el, {
-          scale: CAPTURE_SCALE,
-          backgroundColor: null, // transparent — the page-plane fill below shows through rounded corners
-          logging: false,
-        })
-      );
+      const canvas = await html2canvas(el, {
+        scale: CAPTURE_SCALE,
+        backgroundColor: null, // transparent — the page-plane fill below shows through rounded corners
+        logging: false,
+      });
+      // A zero-size canvas would turn the pagination math into NaN — skip it.
+      if (canvas.width > 0 && canvas.height > 0) canvases.push(canvas);
+    }
+    if (canvases.length === 0) {
+      throw new Error("Report export produced no printable sections");
     }
 
     const heights = canvases.map((c) => c.height * (CONTENT_W / c.width));
