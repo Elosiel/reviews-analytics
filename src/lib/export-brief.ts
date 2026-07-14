@@ -26,27 +26,15 @@ export async function copyBriefText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
-/**
- * Opens a popup window with the given title + body HTML and, by default,
- * triggers print. Callers can supply their own stylesheet (e.g. one that
- * mirrors a specific in-app view more closely than the default brief
- * look) via `styles` — defaults to BRIEF_STYLES so existing callers are
- * unaffected. Pass `shouldPrint = false` to just open the styled tab as
- * a visual reference without triggering the browser's print dialog.
- */
-export function openPrintWindow(
-  title: string,
-  bodyHtml: string,
-  styles: string = BRIEF_STYLES,
-  shouldPrint: boolean = true
-): void {
+/** Opens a popup window with the given title + body HTML and triggers print. */
+export function openPrintWindow(title: string, bodyHtml: string): void {
   const win = window.open("", "_blank");
   if (!win) return;
   win.document.write(`
     <html>
       <head>
         <title>${title}</title>
-        <style>${styles}</style>
+        <style>${BRIEF_STYLES}</style>
       </head>
       <body>
         ${bodyHtml}
@@ -55,7 +43,7 @@ export function openPrintWindow(
     </html>
   `);
   win.document.close();
-  if (shouldPrint) win.print();
+  win.print();
 }
 
 /** "Wednesday, July 8, 2026" — used in both the on-screen header and the printed brief. */

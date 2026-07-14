@@ -1,19 +1,19 @@
 /**
- * Weekly report export — a real print of the app's own design, not a
- * hand-drawn reconstruction. Uses the same popup-window + window.print()
- * mechanic as the Meetings/SOPs exports (src/lib/export-brief.ts), with
- * a stylesheet hand-matched to the on-screen report
- * (ReportDetailModal.tsx / ReportCategoryHeatmap.tsx / ScoreScaleNote):
- * same brand hex values (src/app/globals.css), same Fraunces/Geist
- * fonts, same section order, same card styling, same heatmap coloring
- * (reusing heatStep/HEAT_RAMP from src/lib/design.ts directly).
+ * Weekly report export template — the app's own design as plain
+ * HTML/CSS, hand-matched to the on-screen report (ReportDetailModal.tsx
+ * / ReportCategoryHeatmap.tsx / ScoreScaleNote): same brand hex values
+ * (src/app/globals.css), same Fraunces/Geist fonts, same locked section
+ * order (see CLAUDE.md "Weekly Report Structure"), same card styling,
+ * same heatmap coloring (reusing heatStep/HEAT_RAMP from src/lib/design.ts
+ * directly). Consumed by download-weekly-report-pdf.ts, which renders it
+ * in a hidden iframe and rasterizes it into the downloaded PDF.
  *
- * No PDF binary is ever persisted — the browser's own "Save as PDF"
- * print destination produces the file, straight from the report's
- * stored JSON.
+ * Styling constraint: this stylesheet is rasterized by html2canvas, so
+ * it deliberately avoids CSS features that library renders unreliably —
+ * flex `gap` (margins instead) and `outline` (transparent border that
+ * changes color instead). Colors are plain hex only.
  */
 
-import { openPrintWindow } from "@/lib/export-brief";
 import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep } from "@/lib/design";
 import type {
   DangerFlag,
@@ -48,7 +48,9 @@ function esc(text: string): string {
 // Mirrors src/app/globals.css's @theme brand tokens + the hand-picked
 // hex values already used in the on-screen cards (bg-[#fbeeea] etc.) —
 // same palette, plain hex so nothing relies on Tailwind's runtime.
-const REPORT_STYLES = `
+// Exported for download-weekly-report-pdf.ts, which injects it into the
+// hidden iframe it rasterizes.
+export const REPORT_STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Geist:wght@400;500;600;700&display=swap');
 
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -64,11 +66,11 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .note .pos { color: #0b7d5a; font-weight: 700; }
 .note .neg { color: #c73527; font-weight: 700; }
 
-.danger-card { border: 2px solid #e6b3a8; background: #fbeeea; border-radius: 16px; padding: 20px; margin-bottom: 8px; display: flex; gap: 16px; break-inside: avoid; }
-.danger-icon { width: 36px; height: 36px; border-radius: 999px; background: #c73527; color: #fffdf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
-.danger-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.danger-title { font-family: 'Fraunces', Georgia, serif; font-size: 16px; font-weight: 600; color: #7a1f13; }
-.danger-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: #c73527; color: #fffdf8; border-radius: 999px; padding: 2px 8px; }
+.danger-card { border: 2px solid #e6b3a8; background: #fbeeea; border-radius: 16px; padding: 20px; margin-bottom: 8px; display: flex; }
+.danger-icon { width: 36px; height: 36px; border-radius: 999px; background: #c73527; color: #fffdf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; margin-right: 16px; }
+.danger-top { display: flex; align-items: center; flex-wrap: wrap; }
+.danger-title { font-family: 'Fraunces', Georgia, serif; font-size: 16px; font-weight: 600; color: #7a1f13; margin-right: 8px; }
+.danger-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: #c73527; color: #fffdf8; border-radius: 999px; padding: 2px 8px; margin-right: 8px; }
 .danger-meta { font-size: 12px; color: #97907f; }
 .danger-quote { margin: 8px 0 0; font-size: 14px; font-style: italic; color: #66261a; border-left: 2px solid #e6b3a8; padding-left: 12px; }
 .danger-desc { margin: 8px 0 0; font-size: 12px; color: #8a5347; }
@@ -77,13 +79,13 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: #97907f; margin: 0 0 10px; }
 .summary { font-size: 14px; color: #1d1a14; line-height: 1.6; }
 
-.loc-card { background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 14px; margin-bottom: 8px; break-inside: avoid; }
-.loc-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.loc-left { display: flex; align-items: center; gap: 10px; }
-.loc-rank { width: 24px; height: 24px; border-radius: 999px; background: #f1ecdf; color: #5f594c; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.loc-card { background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 14px; margin-bottom: 8px; }
+.loc-top { display: flex; align-items: center; justify-content: space-between; }
+.loc-left { display: flex; align-items: center; }
+.loc-rank { width: 24px; height: 24px; border-radius: 999px; background: #f1ecdf; color: #5f594c; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 10px; }
 .loc-name { font-family: 'Fraunces', Georgia, serif; font-size: 14px; font-weight: 600; color: #1d1a14; }
-.loc-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.loc-trend { font-size: 12px; font-weight: 600; }
+.loc-right { display: flex; align-items: center; flex-shrink: 0; }
+.loc-trend { font-size: 12px; font-weight: 600; margin-right: 8px; }
 .loc-trend.improving { color: #0b7d5a; }
 .loc-trend.declining { color: #c73527; }
 .loc-trend.flat { color: #97907f; }
@@ -91,11 +93,11 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .loc-verdict { font-size: 13px; color: #5f594c; line-height: 1.6; margin: 8px 0 0; }
 .loc-meta { font-size: 11px; color: #97907f; margin: 6px 0 0; }
 
-.theme-card { border-bottom: 1px solid #f1ecdf; padding-bottom: 16px; margin-bottom: 16px; break-inside: avoid; }
+.theme-card { border-bottom: 1px solid #f1ecdf; padding-bottom: 16px; margin-bottom: 16px; }
 .theme-card:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-.theme-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
-.theme-cat { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #97907f; }
-.theme-score { font-size: 12px; font-weight: 600; }
+.theme-top { display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.theme-cat { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #97907f; margin-right: 8px; }
+.theme-score { font-size: 12px; font-weight: 600; margin-right: 8px; }
 .theme-score.good { color: #0b7d5a; }
 .theme-score.bad { color: #c73527; }
 .theme-meta { font-size: 12px; color: #97907f; }
@@ -103,12 +105,13 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .theme-desc { font-size: 13px; color: #5f594c; line-height: 1.6; }
 .theme-quote { border-left: 2px solid #e9e3d2; padding-left: 12px; font-size: 12px; font-style: italic; color: #5f594c; margin: 8px 0 0; }
 
-.action-card { background: #f0f4ee; border: 1px solid #cfdcc9; border-radius: 12px; padding: 14px; margin-bottom: 10px; break-inside: avoid; }
+.action-card { background: #f0f4ee; border: 1px solid #cfdcc9; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
 .action-title { font-size: 14px; font-weight: 600; color: #17402f; margin: 0 0 4px; }
 .action-detail { font-size: 13px; color: #2c3d2f; line-height: 1.6; }
 .action-tag { font-size: 11px; color: #5d796b; margin: 6px 0 0; }
 
-.heatmap-legend { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 10px; color: #97907f; margin-bottom: 8px; }
+.heatmap-legend { display: flex; align-items: center; justify-content: flex-end; font-size: 10px; color: #97907f; margin-bottom: 8px; }
+.heatmap-legend > * { margin-left: 4px; }
 .heatmap-legend .swatch { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
 .heatmap-caption { font-size: 11px; color: #97907f; margin: 0 0 10px; }
 .heatmap-wrap { background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 8px; }
@@ -116,10 +119,10 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .heatmap-wrap th { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #97907f; font-weight: 600; padding: 4px; text-align: center; }
 .heatmap-wrap th.loc-head { text-align: left; }
 .heatmap-wrap td.loc-cell { font-size: 12px; font-weight: 600; color: #1d1a14; padding: 4px; }
-.heat-cell { border-radius: 8px; padding: 6px 2px; text-align: center; }
+.heat-cell { border-radius: 8px; padding: 6px 2px; text-align: center; border: 2px solid transparent; }
 .heat-cell .score { font-size: 12px; font-weight: 700; display: block; }
 .heat-cell .mentions { font-size: 9px; opacity: .75; display: block; }
-.heat-cell.weakest { outline: 2px solid #c73527; outline-offset: -2px; }
+.heat-cell.weakest { border-color: #c73527; }
 .heat-avg-row td { border-top: 1px solid #f1ecdf; padding-top: 8px; }
 .heat-avg-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #97907f; font-weight: 600; }
 .heat-avg { font-size: 12px; font-weight: 700; text-align: center; }
@@ -339,7 +342,7 @@ function categoryMatrixHtml(
   `;
 }
 
-/** Exported for testing — the pure HTML string builder behind printWeeklyReport. */
+/** The pure HTML string builder for the report body — the single source of truth for the export's structure and content. */
 export function buildWeeklyReportHtml(report: WeeklyReport, quotes: ReportQuoteSnapshot[]): string {
   return `
     <div class="header">
@@ -368,19 +371,7 @@ export function buildWeeklyReportHtml(report: WeeklyReport, quotes: ReportQuoteS
   `;
 }
 
-/** Opens a print window styled to match the on-screen report exactly — the user picks "Save as PDF" as the print destination. */
-export function printWeeklyReport(report: WeeklyReport, quotes: ReportQuoteSnapshot[] = []): void {
-  const title = `Weekly Report — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`;
-  openPrintWindow(title, buildWeeklyReportHtml(report, quotes), REPORT_STYLES);
-}
-
-/**
- * Opens the same styled report tab as printWeeklyReport, but as a pure
- * visual reference — no print dialog triggered. Used alongside the
- * Gmail draft so "Email draft" surfaces the real dashboard UX, which
- * Gmail's plain-text-only compose body can't carry on its own.
- */
-export function previewWeeklyReport(report: WeeklyReport, quotes: ReportQuoteSnapshot[] = []): void {
-  const title = `Weekly Report — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`;
-  openPrintWindow(title, buildWeeklyReportHtml(report, quotes), REPORT_STYLES, false);
+/** "weekly-report-2026-06-30-to-2026-07-06.pdf" — shared by the download path. */
+export function weeklyReportFileName(report: WeeklyReport): string {
+  return `weekly-report-${report.period_start}-to-${report.period_end}.pdf`;
 }

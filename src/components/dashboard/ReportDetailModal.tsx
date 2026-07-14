@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, Printer, Mail, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
+import { X, Download, Loader2, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
-import { printWeeklyReport, previewWeeklyReport } from "@/lib/reports/weekly-report-html";
-import { openGmailDraft } from "@/lib/email-draft";
 import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import ReportCategoryHeatmap from "@/components/dashboard/ReportCategoryHeatmap";
 import type { DangerFlag, WeeklyReport, ReportQuoteSnapshot, ReportTheme } from "@/types";
@@ -87,17 +85,24 @@ function ThemeSection({
 }
 
 export default function ReportDetailModal({ report, quotes, onClose }: ReportDetailModalProps) {
-  const [emailNote, setEmailNote] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  function handleEmailDraft() {
-    // Gmail's compose body is plain-text only — it can't carry the app's
-    // real styling, so a preview tab opens alongside it as the visual
-    // reference. Gmail draft first: it's the button's core function and
-    // must not be dropped if a browser only allows one automatic popup
-    // per click.
-    openGmailDraft(report, quotes);
-    previewWeeklyReport(report, quotes);
-    setEmailNote(true);
+  async function handleDownloadPdf() {
+    if (downloading) return;
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      // Dynamic import: the rasterizer libs load only when someone
+      // actually downloads, never on dashboard page load.
+      const { downloadWeeklyReportPdf } = await import("@/lib/reports/download-weekly-report-pdf");
+      await downloadWeeklyReportPdf(report, quotes);
+    } catch (err) {
+      console.error("Weekly report PDF download failed:", err);
+      setDownloadError("Couldn't build the PDF — please try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -243,24 +248,24 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
 
         {/* Footer */}
         <div className="px-6 pb-6 pt-4 border-t border-line-soft">
-          {emailNote && (
-            <p className="text-xs text-ink-faint mb-3 text-center">
-              Gmail and a styled preview of this report are both open in new tabs. Gmail
-              can&apos;t attach files automatically — print the preview tab (or use Print / PDF
-              below) to save a PDF and attach it yourself before sending.
-            </p>
+          {downloadError && (
+            <p className="text-xs text-neg mb-3 text-center">{downloadError}</p>
           )}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleEmailDraft} className="flex-1 gap-2">
-              <Mail className="w-4 h-4" /> Email draft
-            </Button>
-            <Button
-              onClick={() => printWeeklyReport(report, quotes)}
-              className="flex-1 bg-forest hover:bg-forest-soft text-paper gap-2"
-            >
-              <Printer className="w-4 h-4" /> Print / PDF
-            </Button>
-          </div>
+          <Button
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="w-full bg-forest hover:bg-forest-soft text-paper gap-2"
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Preparing PDF…
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" /> Download PDF
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </div>
