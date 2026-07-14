@@ -373,3 +373,14 @@ export function printWeeklyReport(report: WeeklyReport, quotes: ReportQuoteSnaps
   const title = `Weekly Report — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`;
   openPrintWindow(title, buildWeeklyReportHtml(report, quotes), REPORT_STYLES);
 }
+
+/**
+ * Opens the same styled report tab as printWeeklyReport, but as a pure
+ * visual reference — no print dialog triggered. Used alongside the
+ * Gmail draft so "Email draft" surfaces the real dashboard UX, which
+ * Gmail's plain-text-only compose body can't carry on its own.
+ */
+export function previewWeeklyReport(report: WeeklyReport, quotes: ReportQuoteSnapshot[] = []): void {
+  const title = `Weekly Report — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`;
+  openPrintWindow(title, buildWeeklyReportHtml(report, quotes), REPORT_STYLES, false);
+}

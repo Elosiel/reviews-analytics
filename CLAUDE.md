@@ -102,6 +102,34 @@ Change only after design-partner feedback — not by feel.
 
 ---
 
+## Weekly Report Structure (locked)
+
+The weekly report — on-screen (`ReportDetailModal.tsx`), the Print/PDF export
+(`src/lib/reports/weekly-report-html.ts`), and (structurally) the email draft
+(`src/lib/email-draft.ts`) — always renders in this exact order:
+
+1. Header (period dates)
+2. Score-scale note ("how to read these scores")
+3. Danger alerts — **the only section whose presence is a variable.** It renders
+   only when `needs_attention` has entries; every other section below is a
+   permanent part of the template (an individual section may still show fewer
+   or no cards when there's no data for it that period — that's a data
+   condition, not a structural change).
+4. Executive summary
+5. Location ranking
+6. Good themes
+7. Bad themes
+8. Recommended actions
+9. Category heatmap (always last)
+
+This is the model for every future report. Do not reorder sections, drop one, or
+add a new one without a deliberate decision — new content slots into one of
+these sections, or (rarely) appends after the heatmap. Keep `ReportDetailModal.tsx`
+and `weekly-report-html.ts` describing the same structure — they must never drift
+apart.
+
+---
+
 ## 30-Day Verbatim Text Rule (non-negotiable)
 
 Google API ToS: `review_text` and `reviewer_name` may only be cached 30 days.
