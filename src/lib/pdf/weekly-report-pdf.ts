@@ -152,7 +152,7 @@ function renderHeader(c: PdfCursor, report: WeeklyReport) {
   c.doc.setTextColor("#c9d8d0");
   const generatedLine =
     `Generated ${new Date(report.generated_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` +
-    (report.ai_generated ? "" : " · Built without AI narration — no Anthropic API key configured when this ran");
+    (report.ai_generated ? "" : " · Built without AI narration — no AI provider configured when this ran");
   c.doc.text(generatedLine, MARGIN, 78);
 
   c.y = bandHeight + 24;

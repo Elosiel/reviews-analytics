@@ -54,7 +54,7 @@ export function weeklyReportEmailBody(report: WeeklyReport, quotes: ReportQuoteS
 
   parts.push(`WEEKLY REPORT — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`);
   if (!report.ai_generated) {
-    parts.push("(Built from your review data without AI narration — no Anthropic API key was configured when this ran.)");
+    parts.push("(Built from your review data without AI narration — no AI provider was configured when this ran.)");
   }
   parts.push("");
   parts.push(report.executive_summary);

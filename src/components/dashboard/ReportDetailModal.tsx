@@ -106,7 +106,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
             </h2>
             {!report.ai_generated && (
               <p className="text-xs text-ink-faint mt-1">
-                Built from your review data without AI narration — no Anthropic API key was configured when this ran.
+                Built from your review data without AI narration — no AI provider was configured when this ran.
               </p>
             )}
           </div>
