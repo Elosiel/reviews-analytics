@@ -105,9 +105,9 @@ Change only after design-partner feedback — not by feel.
 ## Weekly Report Structure (locked)
 
 The weekly report — on-screen (`ReportDetailModal.tsx`) and the downloaded PDF
-(`src/lib/reports/weekly-report-html.ts`, rasterized by
-`src/lib/reports/download-weekly-report-pdf.ts`) — always renders in this
-exact order:
+(`src/lib/reports/weekly-report-html.ts`, printed server-side by headless
+Chromium via `/api/reports/pdf` + `src/lib/reports/render-report-pdf.ts`) —
+always renders in this exact order:
 
 1. Header (period dates)
 2. Score-scale note ("how to read these scores")
