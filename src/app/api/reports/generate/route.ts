@@ -29,6 +29,7 @@ import {
 } from "@/lib/pipeline/claude";
 import type {
   DangerFlag,
+  MatrixCell,
   ReportLocationRanking,
   ReportNeedsAttentionItem,
   ReportQuoteSnapshot,
@@ -252,6 +253,55 @@ export async function POST() {
   });
   sourceLocations.sort((a, b) => b.composite_score - a.composite_score);
 
+  // ── Cross-location category matrix — same 90-day snapshot as the
+  // Overview dashboard's heatmap. Read from category_rollups (never a
+  // live join) since this is the long-window, cron-computed comparison
+  // view — the report's headline numbers above stay in the live-joined
+  // 7-day frame; this section is deliberately the broader picture for
+  // context, captured at generation time. ─────────────────────────────
+  const { data: rollups90Raw } = await supabase
+    .from("category_rollups")
+    .select("location_id, category, avg_sentiment_score, sentiment_delta, mention_count, window_end")
+    .eq("tenant_id", tenantId)
+    .eq("window_days", 90)
+    .in("location_id", locationIds)
+    .order("window_end", { ascending: false });
+
+  interface Rollup90Row {
+    location_id: string;
+    category: SentimentCategory;
+    avg_sentiment_score: number | null;
+    sentiment_delta: number | null;
+    mention_count: number | null;
+    window_end: string;
+  }
+  // One row per (location, category) — rollups accumulate a row per
+  // calendar day, so "current" means the most recent window_end.
+  const seenRollup90 = new Set<string>();
+  const latestRollups90: Rollup90Row[] = [];
+  for (const row of (rollups90Raw ?? []) as Rollup90Row[]) {
+    const key = `${row.location_id}:${row.category}`;
+    if (seenRollup90.has(key)) continue;
+    seenRollup90.add(key);
+    latestRollups90.push(row);
+  }
+
+  const categoryMatrix: Record<string, Record<SentimentCategory, MatrixCell>> = {};
+  for (const loc of locations) {
+    categoryMatrix[loc.id] = {} as Record<SentimentCategory, MatrixCell>;
+    for (const cat of ALL_CATEGORIES) {
+      categoryMatrix[loc.id][cat] = { score: 0, delta: 0, mentions: 0 };
+    }
+  }
+  for (const row of latestRollups90) {
+    if (!categoryMatrix[row.location_id]) continue;
+    categoryMatrix[row.location_id][row.category] = {
+      score: row.avg_sentiment_score ?? 0,
+      delta: row.sentiment_delta ?? 0,
+      mentions: row.mention_count ?? 0,
+    };
+  }
+
   // ── Brand-wide good/bad themes ──────────────────────────────────────
   const byCategoryAll = new Map<SentimentCategory, CatRow[]>();
   for (const row of currentCatRows) {
@@ -431,6 +481,7 @@ export async function POST() {
       bad_themes: badThemesFinal,
       location_rankings: locationRankingsFinal,
       recommended_actions: narrative.recommended_actions,
+      category_matrix: categoryMatrix,
       needs_attention: needsAttentionFinal,
       ai_generated: aiGenerated,
       created_by: user.id,

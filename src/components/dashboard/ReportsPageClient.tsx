@@ -5,6 +5,7 @@ import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReportHistoryCard from "@/components/dashboard/ReportHistoryCard";
 import ReportDetailModal from "@/components/dashboard/ReportDetailModal";
+import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import { MOCK_REPORT_QUOTES } from "@/lib/mock-data";
 import type { ReportQuoteSnapshot, WeeklyReport } from "@/types";
 
@@ -86,6 +87,8 @@ export default function ReportsPageClient({ initialReports, demo }: ReportsPageC
           </p>
         </div>
       </div>
+
+      <ScoreScaleNote />
 
       {error && <p className="text-sm text-neg bg-[#fbeeea] rounded-lg px-4 py-3">{error}</p>}
 

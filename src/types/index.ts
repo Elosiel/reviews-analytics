@@ -383,6 +383,14 @@ export interface WeeklyReport {
   bad_themes: ReportTheme[];
   location_rankings: ReportLocationRanking[];
   recommended_actions: ReportAction[];
+  // Cross-location × category sentiment grid — the same 90-day snapshot
+  // the Overview dashboard's "Every location, every category" heatmap
+  // shows (read from category_rollups, never a live join, per the
+  // dashboard-reads-rollups rule). Captured at generation time so a
+  // saved report keeps the picture as it was that week even after later
+  // rollups recompute. Keyed by location_id, same MatrixCell shape as
+  // the dashboard's matrix.
+  category_matrix: Record<string, Record<SentimentCategory, MatrixCell>>;
   ai_generated: boolean;        // false = deterministic fallback (no ANTHROPIC_API_KEY, or Claude failed)
   // Danger-flag reviews (health/safety, legal, discrimination, physical
   // safety) from this period, surfaced regardless of category (spec rule

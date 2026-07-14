@@ -14,8 +14,8 @@
  */
 
 import { jsPDF } from "jspdf";
-import type { DangerFlag, ReportQuoteSnapshot, ReportTheme, WeeklyReport } from "@/types";
-import { CATEGORY_LABELS } from "@/lib/design";
+import type { DangerFlag, ReportQuoteSnapshot, ReportTheme, SentimentCategory, WeeklyReport } from "@/types";
+import { CATEGORIES, CATEGORY_LABELS, heatStep } from "@/lib/design";
 
 const MARGIN = 44;
 const PAGE_WIDTH = 612; // US Letter, points
@@ -156,6 +156,142 @@ function renderHeader(c: PdfCursor, report: WeeklyReport) {
   c.doc.text(generatedLine, MARGIN, 78);
 
   c.y = bandHeight + 24;
+}
+
+function renderScoreScaleNote(c: PdfCursor) {
+  const body =
+    "Every number is an AI sentiment rating from -1.0 (very negative) to +1.0 (very positive) — not a star rating. It's the average across only the reviews that mentioned that specific topic, from the batch of reviews currently synced into this system, which may be a smaller sample than the location's full Google review history.";
+  const lines: string[] = c.doc.splitTextToSize(body, CONTENT_WIDTH - 20);
+  const boxHeight = 16 + lines.length * 10.5 + 10;
+  c.ensureSpace(boxHeight + 10);
+
+  const top = c.y;
+  c.doc.setFillColor(CREAM);
+  c.doc.setDrawColor(LINE_SOFT);
+  c.doc.setLineWidth(1);
+  c.doc.roundedRect(MARGIN, top, CONTENT_WIDTH, boxHeight, 6, 6, "FD");
+
+  let ty = top + 16;
+  c.doc.setFont("helvetica", "bold");
+  c.doc.setFontSize(8.5);
+  c.doc.setTextColor(INK);
+  c.doc.text("How to read these scores", MARGIN + 10, ty);
+  ty += 12;
+
+  c.doc.setFont("helvetica", "normal");
+  c.doc.setFontSize(8);
+  c.doc.setTextColor(INK_SOFT);
+  for (const line of lines) {
+    c.doc.text(line, MARGIN + 10, ty);
+    ty += 10.5;
+  }
+
+  c.y = top + boxHeight + 10;
+}
+
+function renderCategoryMatrix(c: PdfCursor, report: WeeklyReport) {
+  const locations = report.location_rankings;
+  if (locations.length === 0 || Object.keys(report.category_matrix).length === 0) return;
+  c.sectionHeading("Every Location, Every Category");
+  c.paragraph(
+    "90-day snapshot as of this report, from the same rollups the Overview dashboard uses. A red-outlined cell is the weakest location for that category.",
+    { size: 8.5, color: INK_FAINT, gap: 10 }
+  );
+
+  const nameColWidth = 96;
+  const catColWidth = (CONTENT_WIDTH - nameColWidth) / CATEGORIES.length;
+  const cellHeight = 30;
+  const headerHeight = 14;
+  const cellFor = (locationId: string, cat: SentimentCategory) =>
+    report.category_matrix[locationId]?.[cat] ?? { score: 0, delta: 0, mentions: 0 };
+
+  const weakest: Record<SentimentCategory, string> = {} as Record<SentimentCategory, string>;
+  for (const cat of CATEGORIES) {
+    let worst = locations[0]?.location_id;
+    for (const loc of locations) {
+      if (cellFor(loc.location_id, cat).score < cellFor(worst, cat).score) worst = loc.location_id;
+    }
+    weakest[cat] = worst;
+  }
+
+  c.ensureSpace(headerHeight + cellHeight * (locations.length + 1) + 24);
+
+  const headerTop = c.y;
+  c.doc.setFont("helvetica", "bold");
+  c.doc.setFontSize(7);
+  c.doc.setTextColor(INK_FAINT);
+  CATEGORIES.forEach((cat, i) => {
+    const x = MARGIN + nameColWidth + i * catColWidth;
+    const label = CATEGORY_LABELS[cat].toUpperCase();
+    const w = c.doc.getTextWidth(label);
+    c.doc.text(label, x + catColWidth / 2 - w / 2, headerTop + 8);
+  });
+  c.y = headerTop + headerHeight;
+
+  for (const loc of locations) {
+    const rowTop = c.y;
+    c.doc.setFont("helvetica", "bold");
+    c.doc.setFontSize(8.5);
+    c.doc.setTextColor(INK);
+    const nameLines: string[] = c.doc.splitTextToSize(loc.location_name, nameColWidth - 6);
+    let nty = rowTop + 12;
+    for (const line of nameLines.slice(0, 2)) {
+      c.doc.text(line, MARGIN, nty);
+      nty += 10;
+    }
+
+    CATEGORIES.forEach((cat, i) => {
+      const cell = cellFor(loc.location_id, cat);
+      const x = MARGIN + nameColWidth + i * catColWidth;
+      const step = heatStep(cell.score);
+      c.doc.setFillColor(step.bg);
+      c.doc.roundedRect(x + 2, rowTop, catColWidth - 4, cellHeight - 4, 4, 4, "F");
+      if (weakest[cat] === loc.location_id && cell.score < 0) {
+        c.doc.setDrawColor(NEG);
+        c.doc.setLineWidth(1.4);
+        c.doc.roundedRect(x + 2, rowTop, catColWidth - 4, cellHeight - 4, 4, 4, "S");
+      }
+      c.doc.setFont("helvetica", "bold");
+      c.doc.setFontSize(8);
+      c.doc.setTextColor(step.ink);
+      const scoreStr = fmtSigned(cell.score);
+      const scoreW = c.doc.getTextWidth(scoreStr);
+      c.doc.text(scoreStr, x + catColWidth / 2 - scoreW / 2, rowTop + 15);
+      c.doc.setFont("helvetica", "normal");
+      c.doc.setFontSize(6.5);
+      const mStr = `${cell.mentions} mention${cell.mentions !== 1 ? "s" : ""}`;
+      const mW = c.doc.getTextWidth(mStr);
+      c.doc.text(mStr, x + catColWidth / 2 - mW / 2, rowTop + 24);
+    });
+
+    c.y = rowTop + cellHeight;
+  }
+
+  // Group average row
+  const avgTop = c.y + 6;
+  c.doc.setDrawColor(LINE_SOFT);
+  c.doc.setLineWidth(1);
+  c.doc.line(MARGIN, avgTop - 4, PAGE_WIDTH - MARGIN, avgTop - 4);
+  c.doc.setFont("helvetica", "bold");
+  c.doc.setFontSize(7.5);
+  c.doc.setTextColor(INK_FAINT);
+  c.doc.text("GROUP AVERAGE", MARGIN, avgTop + 8);
+  CATEGORIES.forEach((cat, i) => {
+    const avg =
+      locations.length === 0
+        ? 0
+        : locations.reduce((s, l) => s + cellFor(l.location_id, cat).score, 0) / locations.length;
+    const x = MARGIN + nameColWidth + i * catColWidth;
+    const color = avg >= 0.2 ? POS : avg <= -0.2 ? NEG : INK_SOFT;
+    c.doc.setTextColor(color);
+    c.doc.setFont("helvetica", "bold");
+    c.doc.setFontSize(8);
+    const s = fmtSigned(avg);
+    const w = c.doc.getTextWidth(s);
+    c.doc.text(s, x + catColWidth / 2 - w / 2, avgTop + 8);
+  });
+  c.y = avgTop + 18;
+  c.spacer(6);
 }
 
 function renderDangerAlerts(c: PdfCursor, report: WeeklyReport, quotes: ReportQuoteSnapshot[]) {
@@ -473,9 +609,11 @@ export function downloadWeeklyReportPdf(report: WeeklyReport, quotes: ReportQuot
   const c = new PdfCursor(doc);
 
   renderHeader(c, report);
+  renderScoreScaleNote(c);
   renderDangerAlerts(c, report, quotes);
   renderExecutiveSummary(c, report);
   renderLocationRanking(c, report);
+  renderCategoryMatrix(c, report);
   renderThemeSection(c, "What's Going Well", report.good_themes, quotes, "good");
   renderThemeSection(c, "What's Not Working", report.bad_themes, quotes, "bad");
   renderRecommendedActions(c, report);

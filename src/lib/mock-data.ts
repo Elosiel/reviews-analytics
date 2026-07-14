@@ -741,6 +741,9 @@ export const MOCK_REPORTS: WeeklyReport[] = [
         location_name: "Coral Gables",
       },
     ],
+    // Same 90-day matrix the Overview dashboard's heatmap already shows —
+    // reusing MOCK_MATRIX keeps the two views telling one consistent story.
+    category_matrix: MOCK_MATRIX,
     needs_attention: [
       {
         review_id: "rev-8",
