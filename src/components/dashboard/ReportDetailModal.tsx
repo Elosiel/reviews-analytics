@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Download, Loader2, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
+import { weeklyReportFileName } from "@/lib/reports/weekly-report-html";
 import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import ReportCategoryHeatmap from "@/components/dashboard/ReportCategoryHeatmap";
 import type { DangerFlag, WeeklyReport, ReportQuoteSnapshot, ReportTheme } from "@/types";
@@ -93,10 +94,24 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
     setDownloadError(null);
     setDownloading(true);
     try {
-      // Dynamic import: the rasterizer libs load only when someone
-      // actually downloads, never on dashboard page load.
-      const { downloadWeeklyReportPdf } = await import("@/lib/reports/download-weekly-report-pdf");
-      await downloadWeeklyReportPdf(report, quotes);
+      // The PDF is rendered server-side by headless Chromium (a real
+      // browser print of the locked report template), so the file is
+      // identical for every user regardless of their browser.
+      const res = await fetch("/api/reports/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report, quotes }),
+      });
+      if (!res.ok) throw new Error(`PDF endpoint returned ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = weeklyReportFileName(report);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Weekly report PDF download failed:", err);
       setDownloadError("Couldn't build the PDF — please try again.");

@@ -5,13 +5,10 @@
  * (src/app/globals.css), same Fraunces/Geist fonts, same locked section
  * order (see CLAUDE.md "Weekly Report Structure"), same card styling,
  * same heatmap coloring (reusing heatStep/HEAT_RAMP from src/lib/design.ts
- * directly). Consumed by download-weekly-report-pdf.ts, which renders it
- * in a hidden iframe and rasterizes it into the downloaded PDF.
- *
- * Styling constraint: this stylesheet is rasterized by html2canvas, so
- * it deliberately avoids CSS features that library renders unreliably —
- * flex `gap` (margins instead) and `outline` (transparent border that
- * changes color instead). Colors are plain hex only.
+ * directly). Rendered to PDF server-side by /api/reports/pdf via
+ * render-report-pdf.ts (headless Chromium print — real embedded fonts,
+ * vector text, break-inside pagination), so the download is exactly a
+ * browser's own print of this template.
  */
 
 import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep } from "@/lib/design";
@@ -48,10 +45,11 @@ function esc(text: string): string {
 // Mirrors src/app/globals.css's @theme brand tokens + the hand-picked
 // hex values already used in the on-screen cards (bg-[#fbeeea] etc.) —
 // same palette, plain hex so nothing relies on Tailwind's runtime.
-// Exported for download-weekly-report-pdf.ts, which injects it into the
-// hidden iframe it rasterizes.
+// Exported for the /api/reports/pdf route, which injects it into the
+// document that headless Chromium prints.
 export const REPORT_STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Geist:wght@400;500;600;700&display=swap');
+/* Fonts: the PDF route prepends REPORT_FONT_FACE_CSS (report-fonts.ts) —
+   embedded Geist/Fraunces data URIs, so rendering needs no font fetch. */
 
 * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; color: #1d1a14; background: #eef1ee; max-width: 680px; margin: 0 auto; padding: 24px; }
@@ -66,7 +64,7 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .note .pos { color: #0b7d5a; font-weight: 700; }
 .note .neg { color: #c73527; font-weight: 700; }
 
-.danger-card { border: 2px solid #e6b3a8; background: #fbeeea; border-radius: 16px; padding: 20px; margin-bottom: 8px; display: flex; }
+.danger-card { break-inside: avoid; page-break-inside: avoid; border: 2px solid #e6b3a8; background: #fbeeea; border-radius: 16px; padding: 20px; margin-bottom: 8px; display: flex; }
 .danger-icon { width: 36px; height: 36px; border-radius: 999px; background: #c73527; color: #fffdf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; margin-right: 16px; }
 .danger-top { display: flex; align-items: center; flex-wrap: wrap; }
 .danger-title { font-family: 'Fraunces', Georgia, serif; font-size: 16px; font-weight: 600; color: #7a1f13; margin-right: 8px; }
@@ -79,7 +77,7 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: #97907f; margin: 0 0 10px; }
 .summary { font-size: 14px; color: #1d1a14; line-height: 1.6; }
 
-.loc-card { background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 14px; margin-bottom: 8px; }
+.loc-card { break-inside: avoid; page-break-inside: avoid; background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 14px; margin-bottom: 8px; }
 .loc-top { display: flex; align-items: center; justify-content: space-between; }
 .loc-left { display: flex; align-items: center; }
 .loc-rank { width: 24px; height: 24px; border-radius: 999px; background: #f1ecdf; color: #5f594c; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 10px; }
@@ -93,7 +91,7 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .loc-verdict { font-size: 13px; color: #5f594c; line-height: 1.6; margin: 8px 0 0; }
 .loc-meta { font-size: 11px; color: #97907f; margin: 6px 0 0; }
 
-.theme-card { border-bottom: 1px solid #f1ecdf; padding-bottom: 16px; margin-bottom: 16px; }
+.theme-card { break-inside: avoid; page-break-inside: avoid; border-bottom: 1px solid #f1ecdf; padding-bottom: 16px; margin-bottom: 16px; }
 .theme-card:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 .theme-top { display: flex; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
 .theme-cat { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #97907f; margin-right: 8px; }
@@ -105,7 +103,7 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .theme-desc { font-size: 13px; color: #5f594c; line-height: 1.6; }
 .theme-quote { border-left: 2px solid #e9e3d2; padding-left: 12px; font-size: 12px; font-style: italic; color: #5f594c; margin: 8px 0 0; }
 
-.action-card { background: #f0f4ee; border: 1px solid #cfdcc9; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+.action-card { break-inside: avoid; page-break-inside: avoid; background: #f0f4ee; border: 1px solid #cfdcc9; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
 .action-title { font-size: 14px; font-weight: 600; color: #17402f; margin: 0 0 4px; }
 .action-detail { font-size: 13px; color: #2c3d2f; line-height: 1.6; }
 .action-tag { font-size: 11px; color: #5d796b; margin: 6px 0 0; }
@@ -114,7 +112,7 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .heatmap-legend > * { margin-left: 4px; }
 .heatmap-legend .swatch { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
 .heatmap-caption { font-size: 11px; color: #97907f; margin: 0 0 10px; }
-.heatmap-wrap { background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 8px; }
+.heatmap-wrap { break-inside: avoid; page-break-inside: avoid; background: #eef1ee; border: 1px solid #f1ecdf; border-radius: 12px; padding: 8px; }
 .heatmap-wrap table { width: 100%; border-collapse: separate; border-spacing: 2px; }
 .heatmap-wrap th { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #97907f; font-weight: 600; padding: 4px; text-align: center; }
 .heatmap-wrap th.loc-head { text-align: left; }
