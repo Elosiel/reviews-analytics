@@ -5,6 +5,7 @@ import RankedIssueCard from "@/components/dashboard/RankedIssueCard";
 import RecommendationsTable from "@/components/dashboard/RecommendationsTable";
 import ShiftMeetingCard from "@/components/dashboard/ShiftMeetingCard";
 import NeedsAttentionBanner from "@/components/dashboard/NeedsAttentionBanner";
+import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import ProofOfImpactCard from "@/components/dashboard/ProofOfImpactCard";
 import MondayBriefCard from "@/components/dashboard/MondayBriefCard";
 import WeakestLinkSpotlight from "@/components/dashboard/WeakestLinkSpotlight";
@@ -143,6 +144,8 @@ export default function DashboardOverviewClient({
           )}
         </h1>
       </div>
+
+      <ScoreScaleNote />
 
       {/* ── Monday brief — the headline story, delivered ── */}
       <MondayBriefCard />

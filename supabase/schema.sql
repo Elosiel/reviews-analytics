@@ -437,6 +437,11 @@ create table public.weekly_reports (
   bad_themes           jsonb not null default '[]'::jsonb,
   location_rankings    jsonb not null default '[]'::jsonb,
   recommended_actions  jsonb not null default '[]'::jsonb,
+  -- Cross-location x category sentiment grid — the same 90-day snapshot
+  -- as the Overview dashboard's heatmap (read from category_rollups, not
+  -- a live join), captured at generation time so a saved report keeps
+  -- the picture as it was that week even after later rollups recompute.
+  category_matrix      jsonb not null default '{}'::jsonb,
   -- Danger-flag reviews this period (health/safety, legal, discrimination,
   -- physical safety), surfaced regardless of category (spec rule 6) — same
   -- as the dashboard's NeedsAttentionBanner. Metadata only (location, flag,

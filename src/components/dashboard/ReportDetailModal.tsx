@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
 import { downloadWeeklyReportPdf } from "@/lib/pdf/weekly-report-pdf";
 import { openGmailDraft } from "@/lib/email-draft";
+import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
+import ReportCategoryHeatmap from "@/components/dashboard/ReportCategoryHeatmap";
 import type { DangerFlag, WeeklyReport, ReportQuoteSnapshot, ReportTheme } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +119,8 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
 
         {/* Body */}
         <div className="px-6 py-5 space-y-6 overflow-y-auto">
+          <ScoreScaleNote />
+
           {/* Danger flags — loudest element in the report, same as the dashboard */}
           {report.needs_attention.length > 0 && (
             <div className="space-y-2">
@@ -205,6 +209,8 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
               })}
             </div>
           </div>
+
+          <ReportCategoryHeatmap locationRankings={report.location_rankings} matrix={report.category_matrix} />
 
           <ThemeSection title="What's Going Well" themes={report.good_themes} quotes={quotes} tone="good" />
           <ThemeSection title="What's Not Working" themes={report.bad_themes} quotes={quotes} tone="bad" />
