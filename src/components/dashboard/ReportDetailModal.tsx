@@ -102,7 +102,10 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ report, quotes }),
       });
-      if (!res.ok) throw new Error(`PDF endpoint returned ${res.status}`);
+      if (!res.ok) {
+        const body: { detail?: string } | null = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? `PDF endpoint returned ${res.status}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -114,7 +117,8 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Weekly report PDF download failed:", err);
-      setDownloadError("Couldn't build the PDF — please try again.");
+      const detail = err instanceof Error ? err.message : null;
+      setDownloadError(detail ? `Couldn't build the PDF — ${detail}` : "Couldn't build the PDF — please try again.");
     } finally {
       setDownloading(false);
     }

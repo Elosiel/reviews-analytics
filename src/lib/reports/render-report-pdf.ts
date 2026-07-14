@@ -30,7 +30,13 @@ const LOCAL_CHROME_PATHS = [
 interface LaunchTarget {
   executablePath: string;
   args: string[];
+  headless: boolean | "shell";
+  defaultViewport?: { width: number; height: number } | null;
 }
+
+// The viewport @sparticuz/chromium's own README uses for its launch example —
+// kept as a plain constant since this package version doesn't expose it.
+const SPARTICUZ_VIEWPORT = { width: 1920, height: 1080 };
 
 // Rendering is hermetic — fonts are embedded as data URIs
 // (report-fonts.ts), so Chromium needs no network access at all.
@@ -40,11 +46,22 @@ function localArgs(): string[] {
 
 async function resolveLaunchTarget(): Promise<LaunchTarget> {
   if (process.env.CHROME_EXECUTABLE_PATH) {
-    return { executablePath: process.env.CHROME_EXECUTABLE_PATH, args: localArgs() };
+    return { executablePath: process.env.CHROME_EXECUTABLE_PATH, args: localArgs(), headless: true };
   }
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // @sparticuz/chromium ships the "chrome-headless-shell" binary, not a
+    // full Chromium build. Puppeteer only emits the flag that binary
+    // understands (bare `--headless`, not `--headless=new`) when the launch
+    // option is the string "shell" — passing headless: true here makes
+    // puppeteer add `--headless=new`, which the shell binary can't run
+    // under, so the browser process fails to launch.
     const chromium = (await import("@sparticuz/chromium")).default;
-    return { executablePath: await chromium.executablePath(), args: chromium.args };
+    return {
+      executablePath: await chromium.executablePath(),
+      args: chromium.args,
+      headless: "shell",
+      defaultViewport: SPARTICUZ_VIEWPORT,
+    };
   }
   const local = LOCAL_CHROME_PATHS.find((p) => existsSync(p));
   if (!local) {
@@ -52,7 +69,7 @@ async function resolveLaunchTarget(): Promise<LaunchTarget> {
       "No Chromium executable found — set CHROME_EXECUTABLE_PATH or run on Vercel/Lambda"
     );
   }
-  return { executablePath: local, args: localArgs() };
+  return { executablePath: local, args: localArgs(), headless: true };
 }
 
 /**
@@ -61,8 +78,8 @@ async function resolveLaunchTarget(): Promise<LaunchTarget> {
  * Google fonts (Fraunces/Geist) are embedded, not substituted.
  */
 export async function renderReportPdf(fullHtmlDoc: string): Promise<Buffer> {
-  const { executablePath, args } = await resolveLaunchTarget();
-  const browser = await puppeteer.launch({ executablePath, args, headless: true });
+  const { executablePath, args, headless, defaultViewport } = await resolveLaunchTarget();
+  const browser = await puppeteer.launch({ executablePath, args, headless, defaultViewport });
   try {
     const page = await browser.newPage();
     // Rendering is hermetic (fonts embedded as data URIs), so "load" is
