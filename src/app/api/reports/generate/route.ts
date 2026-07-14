@@ -99,6 +99,20 @@ function trendFor(
   currentRows: CatRow[],
   priorRows: CatRow[]
 ): { trend: ReportTrend; basis: string; compositeScorePrior: number | null } {
+  // Too few current-period mentions to say anything real, regardless of
+  // whether a prior period exists — don't let a near-empty sample get
+  // compared against a real average and read as a confident trend.
+  if (currentRows.length < 4) {
+    return {
+      trend: "flat",
+      basis:
+        priorRows.length > 0
+          ? "not enough reviews this period to compare against the prior period"
+          : "not enough reviews this period for a trend signal",
+      compositeScorePrior: priorRows.length > 0 ? compositeScore(priorRows) : null,
+    };
+  }
+
   if (priorRows.length > 0) {
     const cur = compositeScore(currentRows);
     const prior = compositeScore(priorRows);
@@ -111,14 +125,7 @@ function trendFor(
   // No prior-period data yet — within-period heuristic: split this
   // period's reviews chronologically and compare the recent half against
   // the earlier half. Called out explicitly so nobody reads this as a
-  // real week-over-week trend.
-  if (currentRows.length < 4) {
-    return {
-      trend: "flat",
-      basis: "not enough reviews this period for a trend signal",
-      compositeScorePrior: null,
-    };
-  }
+  // real week-over-week trend. currentRows.length >= 4 is guaranteed here.
   const sorted = [...currentRows].sort(
     (a, b) => new Date(a.reviews.reviewed_at).getTime() - new Date(b.reviews.reviewed_at).getTime()
   );
