@@ -106,11 +106,6 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
             <h2 className="font-heading text-lg font-semibold text-ink">
               {fmtDate(report.period_start)} – {fmtDate(report.period_end)}
             </h2>
-            {!report.ai_generated && (
-              <p className="text-xs text-ink-faint mt-1">
-                Built from your review data without AI narration — no AI provider was configured when this ran.
-              </p>
-            )}
           </div>
           <button onClick={onClose} className="text-ink-faint hover:text-ink shrink-0 ml-3">
             <X className="w-5 h-5" />
@@ -154,9 +149,7 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
                         </blockquote>
                       )}
                       <p className="mt-2 text-xs text-[#8a5347]">
-                        A guest reported a possible {FLAG_LABELS[item.flag].toLowerCase()} issue.
-                        Review it with your manager before tonight&apos;s service — these are flagged
-                        no matter which category they fall under.
+                        {`A guest reported a possible ${FLAG_LABELS[item.flag].toLowerCase()} issue. Review it with your manager before tonight's service — these are flagged no matter which category they fall under.`}
                       </p>
                     </div>
                   </div>
@@ -210,8 +203,6 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
             </div>
           </div>
 
-          <ReportCategoryHeatmap locationRankings={report.location_rankings} matrix={report.category_matrix} />
-
           <ThemeSection title="What's Going Well" themes={report.good_themes} quotes={quotes} tone="good" />
           <ThemeSection title="What's Not Working" themes={report.bad_themes} quotes={quotes} tone="bad" />
 
@@ -240,6 +231,8 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
               </div>
             </div>
           )}
+
+          <ReportCategoryHeatmap locationRankings={report.location_rankings} matrix={report.category_matrix} />
         </div>
 
         {/* Footer */}

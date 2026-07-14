@@ -354,10 +354,13 @@ export async function POST() {
   }));
 
   // ── Danger flags — surfaced regardless of category (spec rule 6) ────
-  // Same query shape as buildNeedsAttention() in lib/data/dashboard.ts,
-  // scoped to this period + these locations. Health/safety > legal >
-  // discrimination > physical_safety mirrors that same priority order
-  // when a single review trips more than one flag.
+  // Same query shape as buildNeedsAttention() in lib/data/dashboard.ts:
+  // deliberately NOT restricted to the report's 7-day window — a
+  // still-live safety/legal flag doesn't stop mattering because it falls
+  // outside this week's slice (the quote text itself already ages out via
+  // the 30-day purge). Health/safety > legal > discrimination >
+  // physical_safety mirrors that same priority order when a single
+  // review trips more than one flag.
   const { data: dangerRowsRaw } = await supabase
     .from("review_analyses")
     .select(`
@@ -367,9 +370,7 @@ export async function POST() {
     .eq("needs_attention", true)
     .in("reviews.location_id", locationIds)
     .not("reviews.review_text", "is", null)
-    .gte("reviews.reviewed_at", startOfDayIso(periodStart))
-    .lte("reviews.reviewed_at", endOfDayIso(periodEnd))
-    .order("reviews(reviewed_at)", { ascending: false })
+    .order("analyzed_at", { ascending: false })
     .limit(MAX_NEEDS_ATTENTION);
 
   interface DangerRow {

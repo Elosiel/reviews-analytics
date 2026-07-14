@@ -465,6 +465,9 @@ Write the report.`,
   });
 
   const text = message.content[0]?.type === "text" ? message.content[0].text : "";
+  // Tolerate a markdown code fence around the JSON — the most common way
+  // an otherwise-valid response would trip the deterministic fallback.
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "").trim();
   let parsed: {
     executive_summary?: string;
     good_themes?: { theme: string; description: string }[];
@@ -473,7 +476,7 @@ Write the report.`,
     recommended_actions?: { title: string; detail: string; category: SentimentCategory | null; location_name: string | null }[];
   };
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(cleaned);
   } catch {
     throw new Error(`Claude returned invalid JSON for weekly report: ${text.slice(0, 200)}`);
   }
