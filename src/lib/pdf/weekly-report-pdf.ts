@@ -150,9 +150,7 @@ function renderHeader(c: PdfCursor, report: WeeklyReport) {
   c.doc.setFont("helvetica", "normal");
   c.doc.setFontSize(9.5);
   c.doc.setTextColor("#c9d8d0");
-  const generatedLine =
-    `Generated ${new Date(report.generated_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` +
-    (report.ai_generated ? "" : " · Built without AI narration — no AI provider configured when this ran");
+  const generatedLine = `Generated ${new Date(report.generated_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
   c.doc.text(generatedLine, MARGIN, 78);
 
   c.y = bandHeight + 24;
@@ -613,10 +611,10 @@ export function downloadWeeklyReportPdf(report: WeeklyReport, quotes: ReportQuot
   renderDangerAlerts(c, report, quotes);
   renderExecutiveSummary(c, report);
   renderLocationRanking(c, report);
-  renderCategoryMatrix(c, report);
   renderThemeSection(c, "What's Going Well", report.good_themes, quotes, "good");
   renderThemeSection(c, "What's Not Working", report.bad_themes, quotes, "bad");
   renderRecommendedActions(c, report);
+  renderCategoryMatrix(c, report);
 
   renderFooters(doc, c.page);
 
