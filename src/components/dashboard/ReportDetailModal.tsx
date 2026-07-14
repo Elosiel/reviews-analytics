@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X, Printer, Mail, TrendingUp, TrendingDown, Minus, Sparkles, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CATEGORY_LABELS, fmtScore } from "@/lib/design";
-import { printWeeklyReport } from "@/lib/reports/weekly-report-html";
+import { printWeeklyReport, previewWeeklyReport } from "@/lib/reports/weekly-report-html";
 import { openGmailDraft } from "@/lib/email-draft";
 import ScoreScaleNote from "@/components/dashboard/ScoreScaleNote";
 import ReportCategoryHeatmap from "@/components/dashboard/ReportCategoryHeatmap";
@@ -90,7 +90,13 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
   const [emailNote, setEmailNote] = useState(false);
 
   function handleEmailDraft() {
+    // Gmail's compose body is plain-text only — it can't carry the app's
+    // real styling, so a preview tab opens alongside it as the visual
+    // reference. Gmail draft first: it's the button's core function and
+    // must not be dropped if a browser only allows one automatic popup
+    // per click.
     openGmailDraft(report, quotes);
+    previewWeeklyReport(report, quotes);
     setEmailNote(true);
   }
 
@@ -239,7 +245,9 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
         <div className="px-6 pb-6 pt-4 border-t border-line-soft">
           {emailNote && (
             <p className="text-xs text-ink-faint mb-3 text-center">
-              Gmail is open in a new tab. It can&apos;t attach files automatically, so print the PDF below and attach it yourself before sending.
+              Gmail and a styled preview of this report are both open in new tabs. Gmail
+              can&apos;t attach files automatically — print the preview tab (or use Print / PDF
+              below) to save a PDF and attach it yourself before sending.
             </p>
           )}
           <div className="flex gap-2">

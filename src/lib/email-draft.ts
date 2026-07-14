@@ -12,6 +12,7 @@
  * constraint. The UI says so before opening the window.
  */
 
+import { CATEGORIES, CATEGORY_LABELS } from "@/lib/design";
 import type { DangerFlag, ReportQuoteSnapshot, WeeklyReport } from "@/types";
 
 const FLAG_LABELS: Record<DangerFlag, string> = {
@@ -44,6 +45,20 @@ function sectionHeader(title: string): string {
   return `${title}\n${"─".repeat(title.length)}`;
 }
 
+// Same group-average calc as ReportCategoryHeatmap.tsx / categoryMatrixHtml()
+// in weekly-report-html.ts — the heatmap's headline number, in a form
+// plain text can actually carry.
+function categoryGroupAverages(report: WeeklyReport): string[] {
+  const locations = report.location_rankings;
+  if (locations.length === 0 || Object.keys(report.category_matrix).length === 0) return [];
+  return CATEGORIES.map((cat) => {
+    const avg =
+      locations.reduce((s, l) => s + (report.category_matrix[l.location_id]?.[cat]?.score ?? 0), 0) /
+      locations.length;
+    return `${CATEGORY_LABELS[cat]} ${fmtSigned(avg)}`;
+  });
+}
+
 export function weeklyReportEmailSubject(report: WeeklyReport): string {
   const urgent = report.needs_attention.length > 0 ? "⚠ " : "";
   return `${urgent}Weekly report — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`;
@@ -53,6 +68,10 @@ export function weeklyReportEmailBody(report: WeeklyReport, quotes: ReportQuoteS
   const parts: string[] = [];
 
   parts.push(`WEEKLY REPORT — ${fmtDate(report.period_start)} to ${fmtDate(report.period_end)}`);
+  parts.push("");
+  parts.push(
+    "How to read these scores: every number below is an AI sentiment rating from -1.0 (very negative) to +1.0 (very positive) — not a star rating. It's the average across only the reviews that mentioned that specific topic, from the batch of reviews currently synced into this system."
+  );
   parts.push("");
   parts.push(report.executive_summary);
 
@@ -104,6 +123,13 @@ export function weeklyReportEmailBody(report: WeeklyReport, quotes: ReportQuoteS
     parts.push(
       report.recommended_actions.map((a, i) => `${i + 1}. ${a.title}\n   ${a.detail}`).join("\n\n")
     );
+  }
+
+  const categoryAverages = categoryGroupAverages(report);
+  if (categoryAverages.length > 0) {
+    parts.push("");
+    parts.push(sectionHeader("CATEGORY SNAPSHOT (90-DAY)"));
+    parts.push(categoryAverages.join(" · "));
   }
 
   parts.push("");
