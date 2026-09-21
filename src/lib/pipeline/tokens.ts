@@ -9,35 +9,8 @@
  * - Never log or return raw token values.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { refreshAccessToken } from "@/lib/google/oauth";
-
-// ── Encryption helpers ────────────────────────────────────────────
-
-export function encryptToken(plaintext: string): Buffer {
-  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY!, "hex");
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  const combined = `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-  return Buffer.from(combined);
-}
-
-export function decryptToken(buf: Buffer | string): string {
-  const raw = typeof buf === "string" ? buf : buf.toString();
-  const [ivHex, tagHex, encHex] = raw.split(":");
-  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY!, "hex");
-  const iv = Buffer.from(ivHex, "hex");
-  const tag = Buffer.from(tagHex, "hex");
-  const enc = Buffer.from(encHex, "hex");
-  const decipher = createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-  return decipher.update(enc).toString("utf8") + decipher.final("utf8");
-}
+import { encryptToken, decryptToken } from "@/lib/google/token-crypto";
 
 // ── Get a valid access token for a user (refreshes if needed) ────
 
@@ -66,11 +39,11 @@ export async function getValidAccessToken(
 
   if (row.expires_at > now + REFRESH_BUFFER) {
     // Token still valid
-    return decryptToken(Buffer.from(row.access_token_enc));
+    return decryptToken(row.access_token_enc);
   }
 
   // Need to refresh
-  const refreshToken = decryptToken(Buffer.from(row.refresh_token_enc));
+  const refreshToken = decryptToken(row.refresh_token_enc);
 
   try {
     const newTokens = await refreshAccessToken(refreshToken);

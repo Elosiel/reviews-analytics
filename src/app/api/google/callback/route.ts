@@ -1,33 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
-
-// AES-256-GCM encryption for tokens at rest
-function encryptToken(plaintext: string): string {
-  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY!, "hex");
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  // Store as iv:tag:encrypted (all hex)
-  return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-}
-
-// Exported so the refresh helper can use it
-export function decryptToken(ciphertext: string): string {
-  const key = Buffer.from(process.env.TOKEN_ENCRYPTION_KEY!, "hex");
-  const [ivHex, tagHex, encryptedHex] = ciphertext.split(":");
-  const iv = Buffer.from(ivHex, "hex");
-  const tag = Buffer.from(tagHex, "hex");
-  const encrypted = Buffer.from(encryptedHex, "hex");
-  const decipher = createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-  return decipher.update(encrypted) + decipher.final("utf8");
-}
+import { encryptToken } from "@/lib/google/token-crypto";
 
 // Handles the OAuth callback from Google after the user grants access.
 // Exchanges the code for tokens, encrypts them, and stores in google_tokens.
@@ -63,9 +37,12 @@ export async function GET(request: Request) {
   try {
     const tokens = await exchangeCodeForTokens(code);
 
-    // Encrypt tokens before storing
-    const accessEnc = Buffer.from(encryptToken(tokens.access_token));
-    const refreshEnc = Buffer.from(encryptToken(tokens.refresh_token));
+    // Encrypt tokens before storing — encryptToken returns a "\x"-hex
+    // bytea literal string; pass it straight through, never wrap in Buffer
+    // (Supabase-js would JSON-serialize a Buffer via its .toJSON(), storing
+    // the literal text "{"type":"Buffer","data":[...]}" instead of bytes).
+    const accessEnc = encryptToken(tokens.access_token);
+    const refreshEnc = encryptToken(tokens.refresh_token);
     const expiresAt = Math.floor(Date.now() / 1000) + (tokens.expires_in ?? 3600);
 
     // Get tenant_id from profile
