@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { listReviews } from "@/lib/google/business-profile";
+import { PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -78,7 +79,13 @@ export async function POST(request: Request) {
   let locationsQuery = supabase
     .from("locations")
     .select("id, tenant_id, user_id, google_account_id, google_location_id, name")
-    .eq("connection_broken", false);
+    .eq("connection_broken", false)
+    // Rows seeded by the temporary Places-API bridge (see
+    // lib/google/places-reviews.ts) carry a Place ID, not a real GBP
+    // location resource name — sending one through the real Business
+    // Profile reviews endpoint 404s every time. This path is for real
+    // OAuth-connected locations only.
+    .neq("google_account_id", PLACES_IMPORT_SENTINEL);
 
   if (trigger === "manual" && authedUserId) {
     locationsQuery = locationsQuery.eq("user_id", authedUserId);
