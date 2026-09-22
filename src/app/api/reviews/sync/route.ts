@@ -1,11 +1,13 @@
 /**
  * POST /api/reviews/sync
  *
- * Pulls reviews from Google Business Profile for all active locations.
+ * Pulls reviews from Google Business Profile for active locations.
  * Called by:
  *   1. pg_cron reconciliation poll (every 6h) — body: { trigger: "scheduled_poll" }
+ *      Syncs every tenant's locations in one pass — matches pg_cron's own scope.
  *   2. Pub/Sub push webhook — body: { trigger: "pubsub", location_id: "..." }
- *   3. Manual trigger from settings UI — body: { trigger: "manual", location_id?: "..." }
+ *   3. Manual trigger (settings UI, onboarding) — body: { trigger: "manual", location_id?: "..." }
+ *      Scoped to the authenticated caller's own locations only.
  *
  * After inserting reviews, triggers /api/reviews/analyze for any unanalyzed reviews.
  * After analysis, triggers /api/rollup/compute to refresh aggregations.
@@ -57,23 +59,30 @@ export async function POST(request: Request) {
   }
 
   // For manual/pubsub: verify the user is authenticated
+  let authedUserId: string | null = null;
   if (trigger !== "scheduled_poll") {
     const sessionClient = await createClient();
     const { data: { user } } = await sessionClient.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    authedUserId = user.id;
   }
 
-  // Syncs across every tenant's locations in one pass (matching pg_cron's
-  // own scope) — the auth check above just gates who can trigger it.
+  // scheduled_poll syncs across every tenant's locations in one pass,
+  // matching pg_cron's own scope. A manual trigger is scoped to the calling
+  // user's own locations only — it must never sync (or surface errors from)
+  // another tenant's data just because they happen to have a stale row.
   const supabase = createServiceClient();
 
-  // Determine which locations to sync
   let locationsQuery = supabase
     .from("locations")
     .select("id, tenant_id, user_id, google_account_id, google_location_id, name")
     .eq("connection_broken", false);
+
+  if (trigger === "manual" && authedUserId) {
+    locationsQuery = locationsQuery.eq("user_id", authedUserId);
+  }
 
   if (body.location_id) {
     locationsQuery = locationsQuery.eq("id", body.location_id);
