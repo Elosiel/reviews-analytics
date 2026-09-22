@@ -44,6 +44,8 @@ function OnboardingInner() {
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncSummary, setSyncSummary] = useState<{ synced: number; inserted: number } | null>(null);
 
   // Called after Google Business Profile OAuth completes and returns to this page
   // with ?gbp=connected in the URL
@@ -73,6 +75,29 @@ function OnboardingInner() {
       }
       return next;
     });
+  }
+
+  // Runs the real first sync — replaces the old fixed-delay fake timer.
+  // Called after the restaurant profile is saved, and again on retry.
+  async function runInitialSync() {
+    setStep("syncing");
+    setSyncError(null);
+    try {
+      const res = await fetch("/api/reviews/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "manual" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const failed: { location_id: string; error?: string }[] = data.results ?? [];
+      const firstError = failed.find((r) => r.error)?.error;
+      if (firstError) throw new Error(firstError);
+      setSyncSummary({ synced: data.synced ?? 0, inserted: data.inserted ?? 0 });
+      setStep("done");
+    } catch (e: unknown) {
+      setSyncError(e instanceof Error ? e.message : "Failed to sync reviews.");
+    }
   }
 
   async function saveAndSync() {
@@ -390,17 +415,13 @@ function OnboardingInner() {
               </div>
               <RestaurantProfileForm
                 submitLabel="Save & start first sync"
-                onSaved={() => {
-                  setStep("syncing");
-                  // Give the initial sync a moment, then move to done
-                  setTimeout(() => setStep("done"), 3000);
-                }}
+                onSaved={runInitialSync}
               />
             </div>
           )}
 
           {/* ── STEP 4: Syncing ── */}
-          {step === "syncing" && (
+          {step === "syncing" && !syncError && (
             <div className="bg-white rounded-xl border border-zinc-200 p-12 text-center space-y-6">
               <div className="flex justify-center">
                 <div className="w-14 h-14 rounded-full bg-zinc-100 flex items-center justify-center">
@@ -431,16 +452,15 @@ function OnboardingInner() {
                   Pulling your reviews…
                 </h2>
                 <p className="text-zinc-500">
-                  We&apos;re fetching and analyzing your review history. This takes a
-                  moment for the first sync.
+                  We&apos;re fetching your review history from Google. This takes a
+                  moment for the first sync — don&apos;t close this tab.
                 </p>
               </div>
               <div className="space-y-2 text-left max-w-xs mx-auto">
                 {[
                   "Connecting to Google Business Profile",
                   "Fetching review history",
-                  "Running sentiment analysis",
-                  "Building your ranked report",
+                  "Saving to your account",
                 ].map((msg, i) => (
                   <div key={msg} className="flex items-center gap-2 text-sm text-zinc-500">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: `${i * 0.3}s` }} />
@@ -448,6 +468,31 @@ function OnboardingInner() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ── STEP 4: Sync failed ── */}
+          {step === "syncing" && syncError && (
+            <div className="bg-white rounded-xl border border-zinc-200 p-12 text-center space-y-6">
+              <div className="flex justify-center">
+                <div className="w-14 h-14 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
+                  <svg className="h-7 w-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                  </svg>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-semibold text-zinc-900">
+                  We couldn&apos;t pull your reviews
+                </h2>
+                <p className="text-zinc-500">{syncError}</p>
+              </div>
+              <Button
+                onClick={runInitialSync}
+                className="bg-zinc-900 hover:bg-zinc-800 text-white h-11 px-8"
+              >
+                Try again
+              </Button>
             </div>
           )}
 
@@ -474,8 +519,9 @@ function OnboardingInner() {
                   You&apos;re all set
                 </h2>
                 <p className="text-zinc-500">
-                  Your locations are connected. Your first ranked report is
-                  ready.
+                  {syncSummary && syncSummary.inserted > 0
+                    ? `Your locations are connected — ${syncSummary.inserted} review${syncSummary.inserted !== 1 ? "s" : ""} synced. We're analyzing them now; your ranked report will fill in over the next few minutes.`
+                    : "Your locations are connected. We didn't find any reviews yet — new ones will sync in automatically."}
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
