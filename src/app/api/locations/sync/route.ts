@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { listAccounts, listLocations } from "@/lib/google/business-profile";
-import { decryptToken } from "@/app/api/google/callback/route";
+import { decryptToken } from "@/lib/google/token-crypto";
 
 // GET — fetch available locations from Google Business Profile
 // Called from onboarding after GBP OAuth completes.
@@ -30,9 +30,7 @@ export async function GET() {
   }
 
   try {
-    const accessToken = decryptToken(
-      Buffer.from(tokenRow.access_token_enc).toString()
-    );
+    const accessToken = decryptToken(tokenRow.access_token_enc);
 
     // Fetch all accounts then all locations
     const accountsData = await listAccounts(accessToken);
