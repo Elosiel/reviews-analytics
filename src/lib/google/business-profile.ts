@@ -31,7 +31,13 @@ export async function listLocations(accessToken: string, accountId: string) {
   );
 }
 
-/** Fetch reviews for a location (paginated) */
+/**
+ * Fetch reviews for a location (paginated).
+ * accountId is "accounts/{id}"; locationId is the Business Information API's
+ * resource name "locations/{id}" (what onboarding stores), so it's joined
+ * as-is — prefixing another "locations/" would build a URL Google 404s.
+ * Reviews only exist on the v4 API: GET v4/accounts/{a}/locations/{l}/reviews.
+ */
 export async function listReviews(
   accessToken: string,
   accountId: string,
@@ -41,8 +47,12 @@ export async function listReviews(
   const params = new URLSearchParams({ pageSize: "50" });
   if (pageToken) params.set("pageToken", pageToken);
 
+  const locationPath = locationId.startsWith("locations/")
+    ? locationId
+    : `locations/${locationId}`;
+
   return gbpFetch(
-    `${REVIEWS_BASE}/${accountId}/locations/${locationId}/reviews?${params}`,
+    `${REVIEWS_BASE}/${accountId}/${locationPath}/reviews?${params}`,
     accessToken
   );
 }
