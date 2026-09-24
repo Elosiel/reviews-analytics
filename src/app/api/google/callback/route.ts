@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     if (!profile) throw new Error("Profile not found");
 
     // Upsert — replace if already connected
-    await supabase.from("google_tokens").upsert(
+    const { error: tokenErr } = await supabase.from("google_tokens").upsert(
       {
         user_id: user.id,
         tenant_id: profile.tenant_id,
@@ -67,6 +67,22 @@ export async function GET(request: Request) {
       },
       { onConflict: "user_id" }
     );
+
+    if (tokenErr) throw new Error(`Token store failed: ${tokenErr.message}`);
+
+    // A fresh token repairs a broken connection. lib/pipeline/tokens.ts sets
+    // connection_broken on refresh failure and the sync route skips broken
+    // locations — without this reset, reconnecting would never bring them
+    // back and syncing would stay dead after the first expiry.
+    const { error: repairErr } = await supabase
+      .from("locations")
+      .update({ connection_broken: false, connection_broken_at: null })
+      .eq("user_id", user.id)
+      .eq("connection_broken", true);
+
+    if (repairErr) {
+      console.error("Failed to clear connection_broken on reconnect:", repairErr);
+    }
 
     // Clear the CSRF state from user metadata
     await supabase.auth.updateUser({
