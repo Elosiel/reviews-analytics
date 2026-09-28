@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LogoMark from "@/components/shared/LogoMark";
 
+// Supabase's Google auth provider isn't enabled, so the button dead-ends on a
+// raw "provider is not enabled" error. Hidden until the provider is set up.
+// This is app sign-in only — connecting Google Business Profile happens in
+// onboarding (/api/google/*) and is unaffected.
+const GOOGLE_SIGN_IN_ENABLED =
+  process.env.NEXT_PUBLIC_GOOGLE_SIGN_IN_ENABLED === "true";
+
 export default function LoginPage() {
   return (
     <Suspense>
@@ -142,7 +149,6 @@ function LoginInner() {
           <div className="space-y-4">
             {[
               { stat: "93%", label: "of diners read reviews before visiting" },
-              { stat: "61%", label: "chance a service issue causes a 1–2★ review" },
               { stat: "5–9%", label: "revenue lift per additional star (HBS)" },
             ].map((item) => (
               <div key={item.stat} className="flex items-center gap-4">
@@ -308,7 +314,7 @@ function LoginInner() {
             </>
           )}
 
-          {!signupSent && (
+          {!signupSent && GOOGLE_SIGN_IN_ENABLED && (
             <>
               {/* Divider */}
               <div className="flex items-center gap-3">
@@ -332,7 +338,11 @@ function LoginInner() {
                   </>
                 )}
               </Button>
+            </>
+          )}
 
+          {!signupSent && (
+            <>
               <div className="space-y-3 rounded-lg bg-zinc-50 border border-zinc-100 p-4">
                 <p className="text-xs font-medium text-zinc-700">
                   What we access
