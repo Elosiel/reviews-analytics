@@ -21,6 +21,14 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
+  // With no connected locations, every dashboard page falls back to the
+  // Miami mock walkthrough. Say so plainly — a new client who hasn't finished
+  // connecting Google must never mistake sample numbers for their own.
+  const { count: locationCount } = await supabase
+    .from("locations")
+    .select("*", { count: "exact", head: true });
+  const showingSampleData = !locationCount;
+
   // Count unresolved drift alerts for sidebar badge
   const { count: driftCount } = await supabase
     .from("drift_alerts")
@@ -36,6 +44,15 @@ export default async function DashboardLayout({
       }}
       driftAlertCount={driftCount ?? 0}
     >
+      {showingSampleData && (
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
+          <strong>You&apos;re viewing sample data</strong> from a demo
+          restaurant group — none of these numbers are yours.{" "}
+          <a href="/onboarding" className="font-medium underline underline-offset-2">
+            Connect Google to see your own reviews →
+          </a>
+        </div>
+      )}
       {children}
     </DashboardShell>
   );
