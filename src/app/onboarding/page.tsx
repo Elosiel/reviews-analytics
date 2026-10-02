@@ -14,6 +14,7 @@ interface GBPLocation {
   google_account_id: string;
   name: string;
   address: string;
+  tracked?: boolean;
 }
 
 interface SyncResult {
@@ -83,7 +84,9 @@ function OnboardingInner() {
         setLocationsErrorKind(data?.kind ?? "unavailable");
         throw new Error(data?.error ?? "We couldn't load your locations from Google. Try again in a moment.");
       }
-      setLocations(data.locations ?? []);
+      const found: GBPLocation[] = data.locations ?? [];
+      setLocations(found);
+      setSelected(new Set(found.filter((l) => l.tracked).map((l) => l.google_location_id)));
       setAccountCount(typeof data.account_count === "number" ? data.account_count : null);
       setStep("select");
     } catch (e: unknown) {
@@ -312,6 +315,12 @@ function OnboardingInner() {
                     .
                   </li>
                 </ul>
+                <p className="text-sm text-zinc-800">
+                  <span className="font-medium">On Google&apos;s screen, tick the box for</span>{" "}
+                  &ldquo;See, edit, create and delete your Google business
+                  listings.&rdquo; Google leaves it unticked, and without it we
+                  can&apos;t read your reviews.
+                </p>
                 <p className="text-xs text-zinc-500">
                   Details in our{" "}
                   <a
@@ -429,6 +438,11 @@ function OnboardingInner() {
                             <div className="space-y-0.5">
                               <p className="font-medium text-zinc-900">
                                 {loc.name}
+                                {loc.tracked && (
+                                  <span className="ml-2 text-xs font-normal text-emerald-600">
+                                    Already tracked
+                                  </span>
+                                )}
                               </p>
                               <p className="text-sm text-zinc-500">
                                 {loc.address}

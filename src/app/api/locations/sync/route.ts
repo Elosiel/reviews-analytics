@@ -55,9 +55,20 @@ export async function GET() {
       }
     }
 
+    // Mark locations this tenant already tracks so a reconnect starts with
+    // them selected (RLS scopes this read to the caller's own tenant).
+    const { data: trackedRows } = await supabase
+      .from("locations")
+      .select("google_location_id")
+      .in("google_location_id", locations.map((l) => l.google_location_id));
+    const tracked = new Set((trackedRows ?? []).map((r) => r.google_location_id));
+
     // account_count lets onboarding tell "this Google user manages no
     // Business Profiles" apart from "profiles exist but have no locations".
-    return NextResponse.json({ locations, account_count: accounts.length });
+    return NextResponse.json({
+      locations: locations.map((l) => ({ ...l, tracked: tracked.has(l.google_location_id) })),
+      account_count: accounts.length,
+    });
   } catch (err) {
     console.error("Location sync error:", err);
     const info = describeGoogleError(err);
