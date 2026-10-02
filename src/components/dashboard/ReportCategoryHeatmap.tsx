@@ -1,6 +1,6 @@
 "use client";
 
-import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep } from "@/lib/design";
+import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep, mentionedAverage } from "@/lib/design";
 import { cn } from "@/lib/utils";
 import type { MatrixCell, ReportLocationRanking, SentimentCategory } from "@/types";
 
@@ -33,9 +33,7 @@ export default function ReportCategoryHeatmap({
   }
 
   const groupAvg = (cat: SentimentCategory) =>
-    locationRankings.length === 0
-      ? 0
-      : locationRankings.reduce((s, l) => s + cellFor(l.location_id, cat).score, 0) / locationRankings.length;
+    mentionedAverage(locationRankings.map((l) => cellFor(l.location_id, cat)));
 
   return (
     <div>
@@ -112,9 +110,11 @@ export default function ReportCategoryHeatmap({
                   <td key={cat} className="text-center border-t border-line-soft pt-1.5">
                     <span
                       className="text-xs font-bold tabular-nums"
-                      style={{ color: avg >= 0.2 ? "#0b7d5a" : avg <= -0.2 ? "#c73527" : "#5f594c" }}
+                      style={{
+                        color: avg === null ? "#97907f" : avg >= 0.2 ? "#0b7d5a" : avg <= -0.2 ? "#c73527" : "#5f594c",
+                      }}
                     >
-                      {fmtScore(avg)}
+                      {avg === null ? "—" : fmtScore(avg)}
                     </span>
                   </td>
                 );

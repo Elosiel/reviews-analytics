@@ -11,7 +11,7 @@
  * browser's own print of this template.
  */
 
-import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep } from "@/lib/design";
+import { CATEGORIES, CATEGORY_LABELS, HEAT_RAMP, fmtScore, heatStep, mentionedAverage } from "@/lib/design";
 import type {
   DangerFlag,
   MatrixCell,
@@ -285,9 +285,7 @@ function categoryMatrixHtml(
     weakestPerCategory[cat] = worst;
   }
   const groupAvg = (cat: SentimentCategory) =>
-    locations.length === 0
-      ? 0
-      : locations.reduce((s, l) => s + cellFor(l.location_id, cat).score, 0) / locations.length;
+    mentionedAverage(locations.map((l) => cellFor(l.location_id, cat)));
 
   const headerCells = CATEGORIES.map((cat) => `<th>${esc(CATEGORY_LABELS[cat])}</th>`).join("");
   const rows = locations
@@ -310,6 +308,7 @@ function categoryMatrixHtml(
     .join("");
   const avgCells = CATEGORIES.map((cat) => {
     const avg = groupAvg(cat);
+    if (avg === null) return `<td class="heat-avg" style="color:#97907f">—</td>`;
     const color = avg >= 0.2 ? "#0b7d5a" : avg <= -0.2 ? "#c73527" : "#5f594c";
     return `<td class="heat-avg" style="color:${color}">${fmtScore(avg)}</td>`;
   }).join("");

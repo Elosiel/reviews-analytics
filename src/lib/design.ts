@@ -19,6 +19,17 @@ export const CATEGORIES: SentimentCategory[] = [
   "cleanliness",
 ];
 
+/**
+ * A heatmap column's "Group average": the mean over locations guests
+ * actually mentioned that category at. Empty cells default to 0.00 and
+ * would otherwise drag the average toward neutral. null when none did.
+ */
+export function mentionedAverage(cells: { score: number; mentions: number }[]): number | null {
+  const mentioned = cells.filter((c) => c.mentions > 0);
+  if (mentioned.length === 0) return null;
+  return mentioned.reduce((sum, c) => sum + c.score, 0) / mentioned.length;
+}
+
 export const CATEGORY_LABELS: Record<SentimentCategory, string> = {
   food: "Food",
   service: "Service",
