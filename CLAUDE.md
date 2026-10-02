@@ -160,6 +160,7 @@ Google API ToS: `review_text` and `reviewer_name` may only be cached 30 days.
 5. **Proof-of-impact view** = when a flagged category recovers, surface the before/after delta explicitly
 6. **Danger flags** (health_safety, legal, discrimination, physical_safety) are surfaced as `needs_attention` in UI regardless of category
 7. **Connection broken** = set `locations.connection_broken = true` + send email alert on OAuth refresh failure
+8. **Review import window = last 90 days** (`src/lib/reviews/import-window.ts`). Every sync, first import included, pages Google's reviews newest-updated first and stops at the cutoff — rankings only cover 90 days, and every imported review costs an AI analysis. The listing's own rating and review total still come from Google on each sync.
 
 ---
 

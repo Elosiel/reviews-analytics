@@ -38,6 +38,7 @@ export default async function DashboardPage() {
         groupTrend={mockGroupTrend()}
         trendsByCategory={trendsByCategory}
         reviews={MOCK_REVIEWS}
+        analysis={{ kind: "ready", analyzed: 0, analyzable: 0, totalReviews: MOCK_REVIEWS.length }}
       />
     );
   }
@@ -54,6 +55,7 @@ export default async function DashboardPage() {
       groupTrend={data.groupTrend}
       trendsByCategory={data.trendsByCategory}
       reviews={data.reviews}
+      analysis={data.analysis}
     />
   );
 }

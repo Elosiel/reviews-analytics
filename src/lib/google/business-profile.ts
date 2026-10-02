@@ -3,6 +3,8 @@
  * Docs: https://developers.google.com/my-business/reference/businessinformation/rest
  */
 
+import { GbpApiError } from "./errors";
+
 const GBP_BASE = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const REVIEWS_BASE = "https://mybusiness.googleapis.com/v4";
 
@@ -12,7 +14,7 @@ async function gbpFetch(url: string, accessToken: string) {
   });
 
   if (!res.ok) {
-    throw new Error(`GBP API error ${res.status}: ${await res.text()}`);
+    throw new GbpApiError(res.status, await res.text());
   }
 
   return res.json();
@@ -44,7 +46,8 @@ export async function listReviews(
   locationId: string,
   pageToken?: string
 ) {
-  const params = new URLSearchParams({ pageSize: "50" });
+  // Newest-updated first — the sync's import-window cutoff relies on this order.
+  const params = new URLSearchParams({ pageSize: "50", orderBy: "updateTime desc" });
   if (pageToken) params.set("pageToken", pageToken);
 
   const locationPath = locationId.startsWith("locations/")

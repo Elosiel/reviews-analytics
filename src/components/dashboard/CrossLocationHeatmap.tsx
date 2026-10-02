@@ -9,6 +9,7 @@ import {
   HEAT_RAMP,
   fmtScore,
   heatStep,
+  mentionedAverage,
 } from "@/lib/design";
 
 interface HoverCell {
@@ -47,9 +48,7 @@ export default function CrossLocationHeatmap({
   }
 
   const groupAvg = (cat: SentimentCategory) =>
-    locations.length === 0
-      ? 0
-      : locations.reduce((s, l) => s + matrix[l.id][cat].score, 0) / locations.length;
+    mentionedAverage(locations.map((l) => matrix[l.id][cat]));
 
   return (
     <div className="bg-paper rounded-2xl border border-line overflow-hidden">
@@ -182,14 +181,16 @@ export default function CrossLocationHeatmap({
                       className="text-xs font-bold tabular-nums"
                       style={{
                         color:
-                          avg >= 0.2
+                          avg === null
+                            ? "#97907f"
+                            : avg >= 0.2
                             ? "#0b7d5a"
                             : avg <= -0.2
                             ? "#c73527"
                             : "#5f594c",
                       }}
                     >
-                      {fmtScore(avg)}
+                      {avg === null ? "—" : fmtScore(avg)}
                     </span>
                   </td>
                 );

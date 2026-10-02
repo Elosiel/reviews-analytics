@@ -2,9 +2,9 @@
  * Real dashboard data — replaces mock-data.ts once a tenant has at least
  * one real location. Reads exclusively from category_rollups for scores/
  * deltas/mention counts (never a live aggregate over raw reviews — see
- * CLAUDE.md rule 1); the only live joins to `reviews` here are for pulling
- * verbatim quote text, which by definition isn't something a rollup can
- * store.
+ * CLAUDE.md rule 1); the only live reads of `reviews` here are verbatim
+ * quote text and the review feed (which a rollup can't store), plus plain
+ * row counts for the weekly total and pipeline progress.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -18,6 +18,11 @@ import type {
 } from "@/types";
 import { DRIFT_THRESHOLD } from "@/types";
 import { CATEGORIES } from "@/lib/design";
+import {
+  deriveAnalysisState,
+  type AnalysisCounts,
+  type AnalysisState,
+} from "@/lib/data/analysis-status";
 
 export interface TrendPoint {
   week: string;
@@ -55,6 +60,7 @@ export interface DashboardData {
   groupTrend: TrendPoint[];
   trendsByCategory: Record<SentimentCategory, TrendPoint[]>;
   reviews: ReviewListItem[];
+  analysis: AnalysisState;
 }
 
 function emptyMatrix(locations: Location[]): DashboardData["matrix"] {
@@ -82,6 +88,7 @@ function emptyData(): DashboardData {
     groupTrend: [],
     trendsByCategory,
     reviews: [],
+    analysis: { kind: "not_imported", analyzed: 0, analyzable: 0, totalReviews: 0 },
   };
 }
 
@@ -327,6 +334,53 @@ async function getWeekReviewCount(supabase: SupabaseClient, locationIds: string[
   return count ?? 0;
 }
 
+// Pipeline progress for the "still analyzing" state — plain row counts and
+// timestamps, never a sentiment aggregate (those stay rollup-only, rule 1).
+async function getAnalysisCounts(
+  supabase: SupabaseClient,
+  locations: Location[]
+): Promise<Omit<AnalysisCounts, "hasRollups">> {
+  const locationIds = locations.map((l) => l.id);
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  const reviewCount = () =>
+    supabase.from("reviews").select("id", { count: "exact", head: true }).in("location_id", locationIds);
+
+  const [total, withText, recentWithText, analyzedWithText, lastAnalysis, lastIngest] = await Promise.all([
+    reviewCount(),
+    reviewCount().not("review_text", "is", null),
+    reviewCount().not("review_text", "is", null).gte("reviewed_at", ninetyDaysAgo.toISOString()),
+    supabase
+      .from("review_analyses")
+      .select("id, reviews!inner(location_id, review_text)", { count: "exact", head: true })
+      .in("reviews.location_id", locationIds)
+      .not("reviews.review_text", "is", null),
+    supabase
+      .from("review_analyses")
+      .select("analyzed_at, reviews!inner(location_id)")
+      .in("reviews.location_id", locationIds)
+      .order("analyzed_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("reviews")
+      .select("ingested_at")
+      .in("location_id", locationIds)
+      .order("ingested_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  return {
+    totalReviews: total.count ?? 0,
+    textReviews: withText.count ?? 0,
+    analyzedTextReviews: analyzedWithText.count ?? 0,
+    recentTextReviews: recentWithText.count ?? 0,
+    everSynced: locations.some((l) => l.last_synced_at !== null),
+    lastAnalyzedAt: lastAnalysis.data?.[0]?.analyzed_at ?? null,
+    lastIngestedAt: lastIngest.data?.[0]?.ingested_at ?? null,
+  };
+}
+
 function formatWeekLabel(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -383,7 +437,7 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
   const locationIds = locations.map((l) => l.id);
   const locationNames = Object.fromEntries(locations.map((l) => [l.id, l.name]));
 
-  const [rollups90, rollups30, rollups7Res, needsAttention, recovery, weekReviewCount, reviews] = await Promise.all([
+  const [rollups90, rollups30, rollups7Res, needsAttention, recovery, weekReviewCount, reviews, analysisCounts] = await Promise.all([
     latestRollups(supabase, locationIds, 90),
     latestRollups(supabase, locationIds, 30),
     supabase
@@ -396,10 +450,12 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
     getRecovery(supabase),
     getWeekReviewCount(supabase, locationIds),
     fetchReviewList(supabase, locationIds, locationNames),
+    getAnalysisCounts(supabase, locations),
   ]);
 
   const matrix = buildMatrixFromRollups(locations, rollups90);
   const rollups7 = rollups7Res.data ?? [];
+  const analysis = deriveAnalysisState({ ...analysisCounts, hasRollups: rollups90.length > 0 });
 
   const issuesRows = rollups30
     .filter((r) => (r.avg_sentiment_score ?? 0) < 0)
@@ -434,5 +490,6 @@ export async function getDashboardData(supabase: SupabaseClient): Promise<Dashbo
     groupTrend,
     trendsByCategory,
     reviews,
+    analysis,
   };
 }
