@@ -22,6 +22,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { listReviews } from "@/lib/google/business-profile";
 import { PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
+import { describeGoogleError, type GoogleErrorKind } from "@/lib/google/errors";
+
+// The onboarding first import pages through every review synchronously.
+export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -98,13 +102,24 @@ export async function POST(request: Request) {
   const { data: locations, error: locErr } = await locationsQuery;
 
   if (locErr || !locations?.length) {
+    // no_locations: nothing syncable (none saved, or all marked broken) —
+    // onboarding must not read this as "connected, zero reviews".
     return NextResponse.json(
-      { message: "No locations to sync", synced: 0 },
+      { message: "No locations to sync", synced: 0, inserted: 0, results: [], no_locations: true },
       { status: 200 }
     );
   }
 
-  const results: { location_id: string; inserted: number; error?: string }[] = [];
+  const results: {
+    location_id: string;
+    location_name: string;
+    inserted: number;
+    // Google's own figures for the listing, from the reviews.list response.
+    average_rating?: number | null;
+    total_review_count?: number | null;
+    error?: string;
+    error_kind?: GoogleErrorKind;
+  }[] = [];
 
   for (const loc of locations) {
     try {
@@ -112,12 +127,19 @@ export async function POST(request: Request) {
 
       let pageToken: string | undefined;
       let locationInserted = 0;
+      let averageRating: number | null = null;
+      let totalReviewCount: number | null = null;
 
       // Paginate through all reviews for this location
       do {
         const data = await withBackoff(() =>
           listReviews(accessToken, loc.google_account_id, loc.google_location_id, pageToken)
         );
+
+        // Every page repeats the listing-level stats; a listing with no
+        // reviews omits them, which genuinely means zero reviews.
+        if (typeof data.averageRating === "number") averageRating = data.averageRating;
+        totalReviewCount = typeof data.totalReviewCount === "number" ? data.totalReviewCount : 0;
 
         const reviews: {
           reviewId: string;
@@ -162,18 +184,34 @@ export async function POST(request: Request) {
 
       } while (pageToken);
 
-      // Update last_synced_at
       await supabase
         .from("locations")
-        .update({ last_synced_at: new Date().toISOString() })
+        .update({
+          last_synced_at: new Date().toISOString(),
+          rating: averageRating,
+          review_count: totalReviewCount ?? 0,
+        })
         .eq("id", loc.id);
 
-      results.push({ location_id: loc.id, inserted: locationInserted });
+      results.push({
+        location_id: loc.id,
+        location_name: loc.name,
+        inserted: locationInserted,
+        average_rating: averageRating,
+        total_review_count: totalReviewCount ?? 0,
+      });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Sync failed for location ${loc.id}:`, msg);
-      results.push({ location_id: loc.id, inserted: 0, error: msg });
+      const info = describeGoogleError(err);
+      results.push({
+        location_id: loc.id,
+        location_name: loc.name,
+        inserted: 0,
+        error: info.message,
+        error_kind: info.kind,
+      });
     }
   }
 

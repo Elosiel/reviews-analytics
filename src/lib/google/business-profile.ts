@@ -3,6 +3,8 @@
  * Docs: https://developers.google.com/my-business/reference/businessinformation/rest
  */
 
+import { GbpApiError } from "./errors";
+
 const GBP_BASE = "https://mybusinessbusinessinformation.googleapis.com/v1";
 const REVIEWS_BASE = "https://mybusiness.googleapis.com/v4";
 
@@ -12,7 +14,7 @@ async function gbpFetch(url: string, accessToken: string) {
   });
 
   if (!res.ok) {
-    throw new Error(`GBP API error ${res.status}: ${await res.text()}`);
+    throw new GbpApiError(res.status, await res.text());
   }
 
   return res.json();

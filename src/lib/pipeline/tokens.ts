@@ -11,6 +11,7 @@
 
 import { refreshAccessToken } from "@/lib/google/oauth";
 import { encryptToken, decryptToken } from "@/lib/google/token-crypto";
+import { GoogleReauthError } from "@/lib/google/errors";
 
 // ── Get a valid access token for a user (refreshes if needed) ────
 
@@ -31,7 +32,7 @@ export async function getValidAccessToken(
     .single();
 
   if (error || !row) {
-    throw new Error(`No Google token found for user ${userId}`);
+    throw new GoogleReauthError(`No Google token found for user ${userId}`);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -73,7 +74,7 @@ export async function getValidAccessToken(
       })
       .eq("user_id", userId);
 
-    throw new Error(
+    throw new GoogleReauthError(
       `Google connection broken for user ${userId}. ` +
         `User will see in-app alert and must reconnect.`
     );
