@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import type { Location } from "@/types";
 import type { AnalysisState } from "@/lib/data/analysis-status";
+import { REVIEW_IMPORT_WINDOW_DAYS } from "@/lib/reviews/import-window";
 
 const REFRESH_MS = 15_000;
 
@@ -37,7 +38,7 @@ async function resumeAnalysis(): Promise<string | null> {
   return res.ok ? null : "We couldn't restart analysis. Try again in a moment.";
 }
 
-function copyFor(a: AnalysisState): Copy | null {
+function copyFor(a: AnalysisState, googleReviewTotal: number): Copy | null {
   const starOnly = a.totalReviews - a.analyzable;
   const starOnlyNote =
     starOnly > 0 ? ` ${starOnly} star-only review${starOnly !== 1 ? "s have" : " has"} no text to analyze.` : "";
@@ -52,10 +53,15 @@ function copyFor(a: AnalysisState): Copy | null {
         action: { label: "Import reviews now", run: importReviews },
       };
     case "no_reviews":
-      return {
-        title: "Connected — no reviews on Google yet",
-        body: "Your locations don't have any reviews on Google yet. We check for new ones every 6 hours, and they'll show up here automatically.",
-      };
+      return googleReviewTotal > 0
+        ? {
+            title: `Connected — no reviews from the last ${REVIEW_IMPORT_WINDOW_DAYS} days`,
+            body: `Google shows ${googleReviewTotal} reviews for your locations, but none from the last ${REVIEW_IMPORT_WINDOW_DAYS} days — the window we import and rank. We check for new ones every 6 hours.`,
+          }
+        : {
+            title: "Connected — no reviews on Google yet",
+            body: "Your locations don't have any reviews on Google yet. We check for new ones every 6 hours, and they'll show up here automatically.",
+          };
     case "analyzing":
       return {
         title: `Analyzing your reviews — ${a.analyzed} of ${a.analyzable} done`,
@@ -106,7 +112,8 @@ export default function ConnectionStatusBanner({
   }, [autoRefresh, router]);
 
   const broken = locations.filter((l) => l.connection_broken);
-  const copy = copyFor(analysis);
+  const googleReviewTotal = locations.reduce((sum, l) => sum + (l.review_count ?? 0), 0);
+  const copy = copyFor(analysis, googleReviewTotal);
   if (!copy && broken.length === 0) return null;
 
   // Google's own average, weighted by its review totals — both saved at

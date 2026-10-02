@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
 import { oauthCallbackErrorMessage, type GoogleErrorKind } from "@/lib/google/errors";
+import { REVIEW_IMPORT_WINDOW_DAYS } from "@/lib/reviews/import-window";
 
 type Step = "connect" | "select" | "profile" | "syncing" | "done";
 
@@ -144,6 +145,7 @@ function OnboardingInner() {
   }
 
   const importedCount = syncResults.reduce((sum, r) => sum + r.inserted, 0);
+  const googleReviewTotal = syncResults.reduce((sum, r) => sum + (r.total_review_count ?? 0), 0);
 
   async function saveAndSync() {
     if (selected.size === 0) return;
@@ -658,7 +660,9 @@ function OnboardingInner() {
                 </h2>
                 <p className="text-zinc-500">
                   {importedCount > 0
-                    ? `Connected to Google — ${importedCount} review${importedCount !== 1 ? "s" : ""} imported. We're analyzing them now; your rankings fill in over the next few minutes, and your reviews are already on the dashboard.`
+                    ? `Connected to Google — ${importedCount} review${importedCount !== 1 ? "s" : ""} from the last ${REVIEW_IMPORT_WINDOW_DAYS} days imported. We're analyzing them now; your rankings fill in over the next few minutes, and your reviews are already on the dashboard.`
+                    : googleReviewTotal > 0
+                    ? `Connected to Google. None of these locations' reviews are from the last ${REVIEW_IMPORT_WINDOW_DAYS} days, which is the window rankings cover — new ones will come in automatically.`
                     : "Connected to Google. These locations don't have any reviews on Google yet — new ones will come in automatically."}
                 </p>
               </div>

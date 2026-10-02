@@ -23,8 +23,9 @@ import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { listReviews } from "@/lib/google/business-profile";
 import { PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
 import { describeGoogleError, type GoogleErrorKind } from "@/lib/google/errors";
+import { importCutoffMs, selectWindowReviews } from "@/lib/reviews/import-window";
 
-// The onboarding first import pages through every review synchronously.
+// The onboarding first import pages through the import window synchronously.
 export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -130,7 +131,8 @@ export async function POST(request: Request) {
       let averageRating: number | null = null;
       let totalReviewCount: number | null = null;
 
-      // Paginate through all reviews for this location
+      // Page newest-updated first and stop at the import window.
+      const cutoffMs = importCutoffMs();
       do {
         const data = await withBackoff(() =>
           listReviews(accessToken, loc.google_account_id, loc.google_location_id, pageToken)
@@ -147,18 +149,23 @@ export async function POST(request: Request) {
           comment?: string;
           reviewer?: { displayName?: string };
           createTime: string;
+          updateTime?: string;
         }[] = data.reviews ?? [];
 
         pageToken = data.nextPageToken;
 
         if (reviews.length === 0) break;
 
+        const { keep, reachedCutoff } = selectWindowReviews(reviews, cutoffMs);
+        if (reachedCutoff) pageToken = undefined;
+        if (keep.length === 0) continue;
+
         // Map star rating string → int
         const STAR_MAP: Record<string, number> = {
           ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5,
         };
 
-        const rows = reviews.map((r) => ({
+        const rows = keep.map((r) => ({
           tenant_id: loc.tenant_id,
           location_id: loc.id,
           external_review_id: r.reviewId,

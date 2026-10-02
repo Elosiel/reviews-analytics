@@ -46,7 +46,8 @@ export async function listReviews(
   locationId: string,
   pageToken?: string
 ) {
-  const params = new URLSearchParams({ pageSize: "50" });
+  // Newest-updated first — the sync's import-window cutoff relies on this order.
+  const params = new URLSearchParams({ pageSize: "50", orderBy: "updateTime desc" });
   if (pageToken) params.set("pageToken", pageToken);
 
   const locationPath = locationId.startsWith("locations/")
