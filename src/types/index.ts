@@ -246,8 +246,12 @@ export interface NeedsAttentionItem {
   location_id: string;
   location_name: string;
   flag: DangerFlag;
+  /** Every flag raised, `flag` first. */
+  flags: DangerFlag[];
   star_rating: number;
   quote: string;
+  /** Kept as long as the text is (30-day rule); null if Google gave none. */
+  reviewer_name: string | null;
   reviewed_at: string;
 }
 
@@ -428,6 +432,8 @@ export interface ReportQuoteSnapshot {
   location_id: string | null;
   location_name: string;
   quote_text: string | null;
+  /** Nulled with quote_text at content_purge_at; absent on older reports. */
+  reviewer_name?: string | null;
   star_rating: number | null;
   reviewed_at: string | null;
   content_purge_at: string;

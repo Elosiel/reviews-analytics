@@ -15,6 +15,7 @@ import type {
   RankedIssue,
   DriftAlert,
   NeedsAttentionItem,
+  DangerFlag,
 } from "@/types";
 import { DRIFT_THRESHOLD } from "@/types";
 import { CATEGORIES } from "@/lib/design";
@@ -261,7 +262,7 @@ async function buildNeedsAttention(supabase: SupabaseClient): Promise<NeedsAtten
   const { data } = await supabase
     .from("review_analyses")
     .select(
-      "id, flag_health_safety, flag_legal, flag_discrimination, flag_physical_safety, reviews!inner(id, star_rating, review_text, reviewed_at, location_id, locations!inner(name))"
+      "id, flag_health_safety, flag_legal, flag_discrimination, flag_physical_safety, reviews!inner(id, star_rating, review_text, reviewer_name, reviewed_at, location_id, locations!inner(name))"
     )
     .eq("needs_attention", true)
     .not("reviews.review_text", "is", null)
@@ -272,6 +273,7 @@ async function buildNeedsAttention(supabase: SupabaseClient): Promise<NeedsAtten
   type JoinedReview = {
     star_rating: number;
     review_text: string | null;
+    reviewer_name: string | null;
     reviewed_at: string;
     location_id: string;
     locations: Loc | Loc[] | null;
@@ -290,20 +292,26 @@ async function buildNeedsAttention(supabase: SupabaseClient): Promise<NeedsAtten
       const rev = Array.isArray(row.reviews) ? row.reviews[0] : row.reviews;
       if (!rev?.review_text) return null;
       const loc = Array.isArray(rev.locations) ? rev.locations[0] : rev.locations;
-      const flag = row.flag_health_safety
-        ? "health_safety"
-        : row.flag_legal
-        ? "legal"
-        : row.flag_discrimination
-        ? "discrimination"
-        : "physical_safety";
+      const flags = (
+        [
+          ["health_safety", row.flag_health_safety],
+          ["legal", row.flag_legal],
+          ["discrimination", row.flag_discrimination],
+          ["physical_safety", row.flag_physical_safety],
+        ] as const
+      )
+        .filter(([, on]) => on)
+        .map(([f]) => f as DangerFlag);
+      const flag = flags[0] ?? "physical_safety";
       const item: NeedsAttentionItem = {
         id: row.id,
         location_id: rev.location_id,
         location_name: loc?.name ?? "Unknown location",
         flag,
+        flags: flags.length > 0 ? flags : [flag],
         star_rating: rev.star_rating,
         quote: rev.review_text,
+        reviewer_name: rev.reviewer_name,
         reviewed_at: rev.reviewed_at,
       };
       return item;

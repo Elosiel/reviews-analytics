@@ -78,6 +78,7 @@ function snippet(text: string): string {
 interface JoinedReview {
   id: string;
   review_text: string | null;
+  reviewer_name: string | null;
   star_rating: number;
   reviewed_at: string;
   content_purge_at: string;
@@ -186,7 +187,7 @@ export async function POST() {
     .select(`
       category,
       sentiment_score,
-      reviews!inner(id, review_text, star_rating, reviewed_at, content_purge_at, location_id)
+      reviews!inner(id, review_text, reviewer_name, star_rating, reviewed_at, content_purge_at, location_id)
     `)
     .eq("tenant_id", tenantId)
     .in("reviews.location_id", locationIds)
@@ -372,7 +373,7 @@ export async function POST() {
     .from("review_analyses")
     .select(`
       flag_health_safety, flag_legal, flag_discrimination, flag_physical_safety,
-      reviews!inner(id, star_rating, review_text, reviewed_at, content_purge_at, location_id)
+      reviews!inner(id, star_rating, review_text, reviewer_name, reviewed_at, content_purge_at, location_id)
     `)
     .eq("needs_attention", true)
     .in("reviews.location_id", locationIds)
@@ -538,6 +539,7 @@ export async function POST() {
           location_id: row.reviews.location_id,
           location_name: locationNames.get(row.reviews.location_id) ?? "Unknown location",
           quote_text: snippet(row.reviews.review_text!),
+          reviewer_name: row.reviews.reviewer_name,
           star_rating: row.reviews.star_rating,
           reviewed_at: row.reviews.reviewed_at,
           content_purge_at: row.reviews.content_purge_at,
@@ -561,6 +563,7 @@ export async function POST() {
       location_id: row.reviews.location_id,
       location_name: locationNames.get(row.reviews.location_id) ?? "Unknown location",
       quote_text: snippet(row.reviews.review_text!),
+      reviewer_name: row.reviews.reviewer_name,
       star_rating: row.reviews.star_rating,
       reviewed_at: row.reviews.reviewed_at,
       content_purge_at: row.reviews.content_purge_at,

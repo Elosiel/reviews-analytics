@@ -282,9 +282,11 @@ export const MOCK_NEEDS_ATTENTION: NeedsAttentionItem[] = [
     location_id: "loc-2",
     location_name: "Wynwood",
     flag: "health_safety",
+    flags: ["health_safety"],
     star_rating: 1,
     quote:
       "Both of us felt sick within hours of eating the shrimp special. Something was off.",
+    reviewer_name: "Dana R.",
     reviewed_at: "2026-06-30T21:14:00Z",
   },
 ];

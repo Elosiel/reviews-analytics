@@ -169,10 +169,13 @@ export default function ReportDetailModal({ report, quotes, onClose }: ReportDet
                         <span className="text-[11px] font-semibold uppercase tracking-wide bg-neg text-paper rounded-full px-2 py-0.5">
                           {FLAG_LABELS[item.flag]}
                         </span>
-                        <span className="text-xs text-ink-faint">
-                          {item.location_name} · {item.star_rating}★
-                        </span>
                       </div>
+                      <p className="mt-1.5 text-xs text-[#8a5347]">
+                        {itemQuote?.reviewer_name && (
+                          <span className="font-semibold text-[#66261a]">{`${itemQuote.reviewer_name} · `}</span>
+                        )}
+                        {`${item.star_rating}★ · ${fmtDate(item.reviewed_at.slice(0, 10))} · ${item.location_name}`}
+                      </p>
                       {itemQuote?.quote_text && (
                         <blockquote className="mt-2 text-sm text-[#66261a] italic border-l-2 border-neg/40 pl-3">
                           &ldquo;{itemQuote.quote_text}&rdquo;

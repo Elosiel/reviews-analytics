@@ -357,6 +357,7 @@ create table public.sop_evidence_quotes (
   location_id       uuid references public.locations(id) on delete set null,
   location_name     text not null,
   quote_text        text,              -- nulled at content_purge_at
+  reviewer_name     text,              -- nulled at content_purge_at
   star_rating       int,
   reviewed_at       timestamptz,
   content_purge_at  timestamptz not null
@@ -614,9 +615,9 @@ select cron.schedule(
       and quote_text is not null;
 
     update public.report_quote_snapshots
-    set quote_text = null
+    set quote_text = null, reviewer_name = null
     where content_purge_at <= now()
-      and quote_text is not null;
+      and (quote_text is not null or reviewer_name is not null);
   $$
 );
 

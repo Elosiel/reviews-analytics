@@ -69,7 +69,8 @@ body { font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif; colo
 .danger-top { display: flex; align-items: center; flex-wrap: wrap; }
 .danger-title { font-family: 'Fraunces', Georgia, serif; font-size: 16px; font-weight: 600; color: #7a1f13; margin-right: 8px; }
 .danger-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; background: #c73527; color: #fffdf8; border-radius: 999px; padding: 2px 8px; margin-right: 8px; }
-.danger-meta { font-size: 12px; color: #97907f; }
+.danger-meta { font-size: 12px; color: #8a5347; margin: 6px 0 0; }
+.danger-who { color: #66261a; font-weight: 600; }
 .danger-quote { margin: 8px 0 0; font-size: 14px; font-style: italic; color: #66261a; border-left: 2px solid #e6b3a8; padding-left: 12px; }
 .danger-desc { margin: 8px 0 0; font-size: 12px; color: #8a5347; }
 
@@ -155,8 +156,10 @@ function dangerAlertsHtml(report: WeeklyReport, quotes: ReportQuoteSnapshot[]): 
             <div class="danger-top">
               <span class="danger-title">Needs your attention today</span>
               <span class="danger-badge">${esc(FLAG_LABELS[item.flag])}</span>
-              <span class="danger-meta">${esc(item.location_name)} · ${item.star_rating}★</span>
             </div>
+            <p class="danger-meta">${
+              quote?.reviewer_name ? `<strong class="danger-who">${esc(quote.reviewer_name)}</strong> · ` : ""
+            }${item.star_rating}★ · ${esc(fmtDate(item.reviewed_at.slice(0, 10)))} · ${esc(item.location_name)}</p>
             ${quote?.quote_text ? `<p class="danger-quote">&ldquo;${esc(quote.quote_text)}&rdquo;</p>` : ""}
             <p class="danger-desc">A guest reported a possible ${esc(
               FLAG_LABELS[item.flag].toLowerCase()
