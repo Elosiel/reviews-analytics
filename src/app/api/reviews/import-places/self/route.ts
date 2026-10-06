@@ -20,20 +20,18 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { canAddLocations, getMembership } from "@/lib/team/membership";
 import { importPlacesForTenant, triggerAnalysis, type PlacesImportLocationInput } from "@/lib/pipeline/places-import";
 
 export async function POST(request: Request) {
   const sessionClient = await createClient();
-  const { data: { user } } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: profile } = await sessionClient
-    .from("profiles")
-    .select("tenant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 400 });
+  const me = await getMembership(sessionClient);
+  if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Importing creates locations — same owner/paywall checkpoint as onboarding.
+  const allowed = canAddLocations(me);
+  if (!allowed.ok) return NextResponse.json({ error: allowed.reason }, { status: 403 });
+  const user = me.user;
+  const profile = { tenant_id: me.tenantId };
 
   const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

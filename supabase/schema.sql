@@ -23,6 +23,9 @@ create table public.profiles (
   full_name     text,
   avatar_url    text,
   role          text not null default 'tenant' check (role in ('operator','tenant')),
+  -- Within the restaurant account: owner (billing, add/remove locations,
+  -- invite/remove teammates) or member (everything else).
+  team_role     text not null default 'owner' check (team_role in ('owner','member')),
   plan          text not null default 'trial',  -- trial | standard | enterprise
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
@@ -527,9 +530,13 @@ returns uuid language sql stable as $$
   select nullif(current_setting('app.current_tenant_id', true), '')::uuid;
 $$;
 
--- Profiles: own row
-create policy "own profile" on public.profiles for all
-  using (auth.uid() = id);
+-- Profiles: users READ their own row and their teammates' (same tenant).
+-- No direct writes — a writable own row let a user change their own
+-- tenant_id or role. Writes go through the service role or
+-- security-definer functions (handle_new_user, accept_team_invite).
+create policy "read own team" on public.profiles for select
+  using (id = auth.uid() or tenant_id = public.auth_tenant_id());
+revoke insert, update, delete, truncate on public.profiles from anon, authenticated;
 
 -- Every tenant-scoped table accepts EITHER tenant key:
 --   - auth_tenant_id() — derived from the logged-in user's JWT (auth.uid()).
@@ -641,3 +648,113 @@ select cron.schedule(
     );
   $$
 );
+
+-- Analysis catch-up (every 5 minutes). /api/reviews/analyze hands off to
+-- itself while a backlog remains, but Vercel stops an app calling itself
+-- after a few hops — this keeps a long backlog draining. The route returns
+-- at once and steps aside if a run is already going. (migration 20261006c)
+select cron.schedule(
+  'analysis-catch-up',
+  '*/5 * * * *',
+  $$
+    select net.http_post(
+      url := current_setting('app.base_url') || '/api/reviews/analyze',
+      headers := '{"Content-Type":"application/json","x-cron-secret":"' || current_setting('app.cron_secret') || '"}'::jsonb,
+      body := '{"trigger":"scheduled_catchup"}'::jsonb
+    );
+  $$
+);
+
+-- The analysis queue: unanalyzed reviews with text written since p_since
+-- (the 90-day import window), newest first. Older reviews are never analyzed.
+create or replace function public.pending_analysis_reviews(p_since timestamptz, p_limit int)
+returns table (id uuid, tenant_id uuid, location_id uuid, star_rating int, review_text text)
+language sql stable security invoker set search_path = public as $$
+  select r.id, r.tenant_id, r.location_id, r.star_rating, r.review_text
+  from public.reviews r
+  where r.review_text is not null and r.reviewed_at >= p_since
+    and not exists (select 1 from public.review_analyses a where a.review_id = r.id)
+  order by r.reviewed_at desc
+  limit p_limit;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────
+-- TEAMS — owner/member roles and email invites (migration 20261006)
+-- ─────────────────────────────────────────────────────────────────
+create or replace function public.auth_team_role()
+returns text language sql stable security definer set search_path = public as $$
+  select team_role from public.profiles where id = auth.uid();
+$$;
+
+-- Only owners add or remove locations. Restrictive policies AND with the
+-- existing tenant-isolation policy; no auth.uid() (service role / cron)
+-- is unaffected.
+create policy "owners insert locations" on public.locations as restrictive for insert
+  with check (auth.uid() is null or public.auth_team_role() = 'owner');
+create policy "owners delete locations" on public.locations as restrictive for delete
+  using (auth.uid() is null or public.auth_team_role() = 'owner');
+
+-- 3. Invitations. Only a SHA-256 hash of the link token is stored.
+create table if not exists public.team_invites (
+  id           uuid primary key default uuid_generate_v4(),
+  tenant_id    uuid not null,
+  email        text not null,
+  token_hash   text not null unique,
+  invited_by   uuid references public.profiles(id) on delete set null,
+  created_at   timestamptz not null default now(),
+  expires_at   timestamptz not null default now() + interval '14 days',
+  accepted_at  timestamptz,
+  accepted_by  uuid references public.profiles(id) on delete set null
+);
+create index if not exists team_invites_tenant_idx on public.team_invites (tenant_id);
+create unique index if not exists team_invites_one_pending_per_email
+  on public.team_invites (tenant_id, lower(email)) where accepted_at is null;
+
+alter table public.team_invites enable row level security;
+create policy "team reads invites" on public.team_invites for select
+  using (tenant_id = public.auth_tenant_id());
+revoke insert, update, delete, truncate on public.team_invites from anon, authenticated;
+
+-- 4. Accepting an invite moves the caller (and only the caller) into the
+--    inviting restaurant account, if the link is valid, unexpired, unused,
+--    issued to the caller's own confirmed email, and the caller's current
+--    account has no data of its own to orphan.
+create or replace function public.accept_team_invite(p_token_hash text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+  v_uid        uuid := auth.uid();
+  v_email      text;
+  v_confirmed  timestamptz;
+  v_inv        public.team_invites%rowtype;
+  v_old_tenant uuid;
+begin
+  if v_uid is null then return 'not_signed_in'; end if;
+
+  select * into v_inv from public.team_invites where token_hash = p_token_hash for update;
+  if not found then return 'invalid'; end if;
+  if v_inv.accepted_at is not null then
+    return case when v_inv.accepted_by = v_uid then 'already_member' else 'used' end;
+  end if;
+  if v_inv.expires_at < now() then return 'expired'; end if;
+
+  select lower(email), email_confirmed_at into v_email, v_confirmed from auth.users where id = v_uid;
+  if v_email is distinct from lower(v_inv.email) then return 'wrong_email'; end if;
+  if v_confirmed is null then return 'email_unconfirmed'; end if;
+
+  select tenant_id into v_old_tenant from public.profiles where id = v_uid for update;
+  if v_old_tenant <> v_inv.tenant_id then
+    if exists (select 1 from public.locations where tenant_id = v_old_tenant)
+       or exists (select 1 from public.profiles where tenant_id = v_old_tenant and id <> v_uid) then
+      return 'has_own_account';
+    end if;
+    update public.profiles
+      set tenant_id = v_inv.tenant_id, team_role = 'member', updated_at = now()
+      where id = v_uid;
+  end if;
+
+  update public.team_invites set accepted_at = now(), accepted_by = v_uid where id = v_inv.id;
+  return 'joined';
+end;
+$$;
+revoke all on function public.accept_team_invite(text) from public, anon;
+grant execute on function public.accept_team_invite(text) to authenticated;

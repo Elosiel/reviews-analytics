@@ -47,10 +47,13 @@ function OnboardingInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>("connect");
+  // ?add=1: an existing account adding stores — straight to the picker, and
+  // no restaurant-profile step (that's already filled in).
+  const addMode = searchParams.get("add") === "1";
 
   // Auto-advance to location selection if returning from Google OAuth
   useEffect(() => {
-    if (searchParams.get("gbp") === "connected") {
+    if (searchParams.get("gbp") === "connected" || addMode) {
       fetchLocations();
     }
     const callbackError = searchParams.get("error");
@@ -158,7 +161,14 @@ function OnboardingInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locations: payload }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "We couldn't save your locations. Please try again.");
+      }
+      if (addMode) {
+        await runInitialSync();
+        return;
+      }
       // Locations saved — now learn who the restaurant is before syncing
       setStep("profile");
     } catch (e: unknown) {
@@ -388,11 +398,12 @@ function OnboardingInner() {
             <div className="space-y-4">
               <div className="bg-white rounded-xl border border-zinc-200 p-8 space-y-2">
                 <h1 className="text-2xl font-semibold text-zinc-900">
-                  Select your locations
+                  {addMode ? "Add locations" : "Select your locations"}
                 </h1>
                 <p className="text-zinc-500">
-                  Choose which locations to track. You can add or remove
-                  locations later in Settings.
+                  {addMode
+                    ? "Locations you already track are checked. Select the new ones to add — we'll import their reviews right away."
+                    : "Choose which locations to track. You can add or remove locations later in Settings."}
                 </p>
               </div>
 

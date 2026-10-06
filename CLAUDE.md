@@ -148,6 +148,14 @@ Google API ToS: `review_text` and `reviewer_name` may only be cached 30 days.
 - RLS enforced via Postgres session variable `app.current_tenant_id`
 - Set with `SELECT set_tenant('uuid')` — NEVER from request params
 - Two roles: `operator` (admin, service-role) · `tenant` (RLS-scoped)
+- **Teams:** several logins can share one tenant. `profiles.team_role` is `owner`
+  (billing, add/remove locations, invite/remove teammates) or `member` (everything
+  else). Teammates are free — pricing is per location. Owners invite by email
+  (Settings → Team, `team_invites`); `accept_team_invite()` moves the invitee into
+  the tenant. Owner-only actions are enforced server-side (`src/lib/team/membership.ts`,
+  `canAddLocations` is the future paywall checkpoint) and by RLS on `locations`.
+- `profiles` is **read-only** to users (own row + teammates). Never re-add a
+  writable own-row policy — it lets a user change their own `tenant_id` or `role`.
 
 ---
 

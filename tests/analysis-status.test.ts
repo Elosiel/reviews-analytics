@@ -13,7 +13,6 @@ const counts = (overrides: Partial<AnalysisCounts>): AnalysisCounts => ({
   totalReviews: 120,
   textReviews: 100,
   analyzedTextReviews: 100,
-  recentTextReviews: 40,
   hasRollups: true,
   everSynced: true,
   lastAnalyzedAt: ago(60_000),
@@ -51,11 +50,11 @@ test("fully analyzed with rollups is 'ready'", () => {
 test("fully analyzed, no rollups yet: 'finishing' right after analysis, otherwise nothing to rank", () => {
   assert.equal(kind({ hasRollups: false }), "finishing");
   assert.equal(kind({ hasRollups: false, lastAnalyzedAt: ago(STALL_AFTER_MS + 1) }), "nothing_to_rank");
-  assert.equal(kind({ hasRollups: false, recentTextReviews: 0 }), "nothing_to_rank");
+  assert.equal(kind({ hasRollups: false, textReviews: 0, analyzedTextReviews: 0 }), "nothing_to_rank");
 });
 
 test("star-only reviews (no text) never block the state", () => {
-  const starOnly = { totalReviews: 12, textReviews: 0, analyzedTextReviews: 0, recentTextReviews: 0, hasRollups: false };
+  const starOnly = { totalReviews: 12, textReviews: 0, analyzedTextReviews: 0, hasRollups: false };
   assert.equal(kind(starOnly), "nothing_to_rank");
 });
 

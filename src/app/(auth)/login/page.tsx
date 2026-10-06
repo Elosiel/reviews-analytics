@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LogoMark from "@/components/shared/LogoMark";
+import { safeNextPath } from "@/lib/team/invite-shared";
 
 // Supabase's Google auth provider isn't enabled, so the button dead-ends on a
 // raw "provider is not enabled" error. Hidden until the provider is set up.
@@ -24,10 +25,14 @@ export default function LoginPage() {
 
 function LoginInner() {
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  // Where to land after auth (e.g. back on a team invite) — same-site paths only.
+  const next = safeNextPath(searchParams.get("next"));
+  const [mode, setMode] = useState<"signin" | "signup">(
+    searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -63,7 +68,7 @@ function LoginInner() {
       return;
     }
     // Full navigation so the middleware picks up the new session cookies
-    window.location.assign("/dashboard");
+    window.location.assign(next ?? "/dashboard");
   }
 
   async function handleEmailSignUp(e: React.FormEvent) {
@@ -84,7 +89,9 @@ function LoginInner() {
       password,
       options: {
         data: fullName ? { full_name: fullName } : undefined,
-        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+        emailRedirectTo: `${window.location.origin}/api/auth/callback${
+          next ? `?next=${encodeURIComponent(next)}` : ""
+        }`,
       },
     });
     if (error) {
@@ -94,7 +101,7 @@ function LoginInner() {
     }
     if (data.session) {
       // Email confirmation is off — the account is ready immediately
-      window.location.assign("/onboarding");
+      window.location.assign(next ?? "/onboarding");
       return;
     }
     // Confirmation required — Supabase emailed a verify link

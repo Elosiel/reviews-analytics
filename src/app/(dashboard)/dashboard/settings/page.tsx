@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, RefreshCw, Plus, Sparkles } from "lucide-react";
 import DeleteLocationButton from "@/components/dashboard/DeleteLocationButton";
+import TeamSection, { type PendingInvite, type Teammate } from "@/components/team/TeamSection";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -9,20 +10,31 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email, plan, tenant_id")
+    .select("full_name, email, plan, tenant_id, team_role")
     .eq("id", user!.id)
     .single();
+  const isOwner = profile?.team_role !== "member";
 
-  const { data: locations } = await supabase
-    .from("locations")
-    .select("id, name, address, rating, review_count, connection_broken, last_synced_at")
-    .order("name");
-
-  const { data: tokenRow } = await supabase
-    .from("google_tokens")
-    .select("updated_at, scope")
-    .eq("user_id", user!.id)
-    .single();
+  // All three reads are RLS-scoped to this restaurant account.
+  const [{ data: locations }, { data: tokenRow }, { data: teammates }, { data: invites }] = await Promise.all([
+    supabase
+      .from("locations")
+      .select("id, name, address, rating, review_count, connection_broken, last_synced_at")
+      .order("name"),
+    // The account's Google connection, whoever on the team made it.
+    supabase
+      .from("google_tokens")
+      .select("updated_at, scope")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("profiles").select("id, email, full_name, team_role").order("created_at"),
+    supabase
+      .from("team_invites")
+      .select("id, email, expires_at")
+      .is("accepted_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const plan = profile?.plan ?? "trial";
   const locationCount = locations?.length ?? 0;
@@ -79,7 +91,7 @@ export default async function SettingsPage() {
             {plan}
           </span>
         </div>
-        {plan === "trial" && (
+        {plan === "trial" && isOwner && (
           <div className="px-6 py-4 bg-cream/60">
             <p className="text-sm text-ink-soft">
               You&apos;re on a free trial.{" "}
@@ -94,6 +106,13 @@ export default async function SettingsPage() {
           </div>
         )}
       </div>
+
+      <TeamSection
+        isOwner={isOwner}
+        currentUserId={user!.id}
+        teammates={(teammates ?? []) as Teammate[]}
+        invites={(invites ?? []) as PendingInvite[]}
+      />
 
       {/* Google connection */}
       <div className="bg-paper rounded-2xl border border-line divide-y divide-line-soft">
@@ -123,13 +142,19 @@ export default async function SettingsPage() {
                 })}
               </p>
               <p className="text-xs text-ink-faint">Scope: {tokenRow.scope}</p>
-              <a href="/api/google/connect">
-                <Button variant="outline" size="sm" className="gap-2">
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Reconnect
-                </Button>
-              </a>
+              {isOwner ? (
+                <a href="/api/google/connect">
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Reconnect
+                  </Button>
+                </a>
+              ) : (
+                <p className="text-xs text-ink-faint">Managed by the account owner.</p>
+              )}
             </>
+          ) : !isOwner ? (
+            <p className="text-xs text-ink-faint">The account owner connects Google Business Profile.</p>
           ) : (
             <a href="/api/google/connect">
               <Button
@@ -155,23 +180,25 @@ export default async function SettingsPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <a href="/dashboard/settings/import">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Sparkles className="w-3.5 h-3.5" />
-                Search & import now
-              </Button>
-            </a>
-            <a href="/onboarding">
-              <Button variant="outline" size="sm" className="gap-2">
-                <Plus className="w-3.5 h-3.5" />
-                Add location
-              </Button>
-            </a>
-          </div>
+          {isOwner && (
+            <div className="flex items-center gap-2">
+              <a href="/dashboard/settings/import">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Search & import now
+                </Button>
+              </a>
+              <a href={tokenRow ? "/onboarding?add=1" : "/onboarding"}>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Plus className="w-3.5 h-3.5" />
+                  Add location
+                </Button>
+              </a>
+            </div>
+          )}
         </div>
 
-        {!tokenRow && (
+        {!tokenRow && isOwner && (
           <div className="px-6 py-3 bg-cream/60">
             <p className="text-xs text-ink-soft">
               Waiting on Google&apos;s official Business Profile approval?{" "}
@@ -188,10 +215,15 @@ export default async function SettingsPage() {
 
         {!locations || locations.length === 0 ? (
           <div className="px-6 py-8 text-center text-sm text-ink-faint">
-            No locations tracked yet.{" "}
-            <a href="/onboarding" className="text-forest underline underline-offset-2">
-              Add your first location
-            </a>
+            No locations tracked yet.
+            {isOwner && (
+              <>
+                {" "}
+                <a href="/onboarding" className="text-forest underline underline-offset-2">
+                  Add your first location
+                </a>
+              </>
+            )}
           </div>
         ) : (
           locations.map((loc) => (
@@ -220,7 +252,7 @@ export default async function SettingsPage() {
                     {loc.review_count} reviews
                   </p>
                 </div>
-                <DeleteLocationButton locationId={loc.id} locationName={loc.name} />
+                {isOwner && <DeleteLocationButton locationId={loc.id} locationName={loc.name} />}
               </div>
             </div>
           ))

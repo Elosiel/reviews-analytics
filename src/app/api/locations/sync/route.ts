@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { listAccounts, listLocations } from "@/lib/google/business-profile";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { describeGoogleError } from "@/lib/google/errors";
+import { canAddLocations, getMembership } from "@/lib/team/membership";
 
 // GET — fetch available locations from Google Business Profile
 // Called from onboarding after GBP OAuth completes.
@@ -80,23 +81,16 @@ export async function GET() {
 // Body: { locations: GBPLocation[] }
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const me = await getMembership(supabase);
+  if (!me) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tenant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ error: "Profile not found" }, { status: 400 });
+  const allowed = canAddLocations(me);
+  if (!allowed.ok) {
+    return NextResponse.json({ error: allowed.reason }, { status: 403 });
   }
+  const user = me.user;
+  const profile = { tenant_id: me.tenantId };
 
   const body = await request.json();
   const incoming: {

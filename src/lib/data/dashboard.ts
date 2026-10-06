@@ -23,6 +23,7 @@ import {
   type AnalysisCounts,
   type AnalysisState,
 } from "@/lib/data/analysis-status";
+import { importCutoffMs } from "@/lib/reviews/import-window";
 
 export interface TrendPoint {
   week: string;
@@ -336,26 +337,31 @@ async function getWeekReviewCount(supabase: SupabaseClient, locationIds: string[
 
 // Pipeline progress for the "still analyzing" state — plain row counts and
 // timestamps, never a sentiment aggregate (those stay rollup-only, rule 1).
+// Counts cover the 90-day import window only — the same reviews
+// /api/reviews/analyze works through — so progress can actually finish.
 async function getAnalysisCounts(
   supabase: SupabaseClient,
   locations: Location[]
 ): Promise<Omit<AnalysisCounts, "hasRollups">> {
   const locationIds = locations.map((l) => l.id);
-  const ninetyDaysAgo = new Date();
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const since = new Date(importCutoffMs()).toISOString();
 
   const reviewCount = () =>
-    supabase.from("reviews").select("id", { count: "exact", head: true }).in("location_id", locationIds);
+    supabase
+      .from("reviews")
+      .select("id", { count: "exact", head: true })
+      .in("location_id", locationIds)
+      .gte("reviewed_at", since);
 
-  const [total, withText, recentWithText, analyzedWithText, lastAnalysis, lastIngest] = await Promise.all([
+  const [total, withText, analyzedWithText, lastAnalysis, lastIngest] = await Promise.all([
     reviewCount(),
     reviewCount().not("review_text", "is", null),
-    reviewCount().not("review_text", "is", null).gte("reviewed_at", ninetyDaysAgo.toISOString()),
     supabase
       .from("review_analyses")
-      .select("id, reviews!inner(location_id, review_text)", { count: "exact", head: true })
+      .select("id, reviews!inner(location_id, review_text, reviewed_at)", { count: "exact", head: true })
       .in("reviews.location_id", locationIds)
-      .not("reviews.review_text", "is", null),
+      .not("reviews.review_text", "is", null)
+      .gte("reviews.reviewed_at", since),
     supabase
       .from("review_analyses")
       .select("analyzed_at, reviews!inner(location_id)")
@@ -374,7 +380,6 @@ async function getAnalysisCounts(
     totalReviews: total.count ?? 0,
     textReviews: withText.count ?? 0,
     analyzedTextReviews: analyzedWithText.count ?? 0,
-    recentTextReviews: recentWithText.count ?? 0,
     everSynced: locations.some((l) => l.last_synced_at !== null),
     lastAnalyzedAt: lastAnalysis.data?.[0]?.analyzed_at ?? null,
     lastIngestedAt: lastIngest.data?.[0]?.ingested_at ?? null,

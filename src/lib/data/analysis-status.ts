@@ -7,13 +7,17 @@
  * run it directly under Node's type stripping.
  */
 
+/**
+ * Every count covers only reviews written in the last 90 days — the import
+ * window, and the widest window rankings cover. Older reviews (e.g. history
+ * imported before the window existed) stay listed but are never analyzed,
+ * so counting them would show progress that can never finish.
+ */
 export interface AnalysisCounts {
   totalReviews: number;
   /** Reviews that still have text — only these can be analyzed. */
   textReviews: number;
   analyzedTextReviews: number;
-  /** Reviews with text from the last 90 days — the widest rollup window. */
-  recentTextReviews: number;
   hasRollups: boolean;
   /** Any location has completed at least one review sync. */
   everSynced: boolean;
@@ -37,9 +41,9 @@ export interface AnalysisState {
   totalReviews: number;
 }
 
-// Analysis runs in batches of 10, each chaining the next within seconds.
-// No progress for this long means the chain broke; the 6-hourly
-// reconciliation poll would restart it, but the owner shouldn't wait.
+// Analysis runs continuously while reviews are pending, and a catch-up job
+// restarts it every 5 minutes. No progress for this long means something is
+// wrong, so the owner gets a manual restart.
 export const STALL_AFTER_MS = 10 * 60 * 1000;
 
 function msSince(iso: string | null, now: number): number {
@@ -68,7 +72,7 @@ export function deriveAnalysisState(c: AnalysisCounts, now: number = Date.now())
   // Everything analyzed but no rollup yet: either the rollup job is still
   // running (it fires after each analysis batch), or there's genuinely
   // nothing in the last 90 days to rank.
-  if (c.recentTextReviews > 0 && msSince(c.lastAnalyzedAt, now) <= STALL_AFTER_MS) {
+  if (c.textReviews > 0 && msSince(c.lastAnalyzedAt, now) <= STALL_AFTER_MS) {
     return { ...base, kind: "finishing" };
   }
   return { ...base, kind: "nothing_to_rank" };

@@ -1,29 +1,51 @@
 /**
  * POST /api/reviews/analyze
  *
- * Finds all reviews that haven't been analyzed yet and runs them
- * through Claude for sentiment categorization.
+ * Runs not-yet-analyzed reviews through Claude for sentiment
+ * categorization — only reviews written inside the import window (last
+ * 90 days, the widest rollup window). Older reviews stay listed with their
+ * stars but never cost an AI call.
  *
  * Called by:
  *   - /api/reviews/sync (after ingest)
- *   - pg_cron (catch-up on any missed analyses)
- *   - Manual trigger from settings
+ *   - pg_cron "analysis-catch-up" every 5 minutes (picks up whatever a
+ *     previous run didn't finish)
+ *   - Manual "Resume analysis" from the dashboard
  *
- * Processes in batches of 10 to stay within Claude rate limits.
- * On completion triggers /api/rollup/compute to refresh aggregations.
+ * Answers right away and works in the background (pg_cron's HTTP call gives
+ * up after 5 seconds): up to ~40s, a few reviews in parallel, then hands off
+ * to a fresh run. Vercel caps how many times an app can call itself in a
+ * row, so the self-hand-off is best-effort; the cron job is what guarantees
+ * the backlog drains. On progress, triggers /api/rollup/compute.
  */
 
 import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { analyzeReview } from "@/lib/pipeline/claude";
+import { importCutoffMs } from "@/lib/reviews/import-window";
+
+export const maxDuration = 60;
 
 const CRON_SECRET = process.env.CRON_SECRET;
 const BATCH_SIZE = 10;
+const CONCURRENCY = 4;
+const TIME_BUDGET_MS = 40_000;
+// A catch-up run steps aside when analysis landed this recently: a run is
+// still going, and two would pick the same pending reviews.
+const ACTIVE_RUN_MS = 90_000;
 
 function verifyCronSecret(request: Request): boolean {
   const secret = request.headers.get("x-cron-secret");
   return !!CRON_SECRET && secret === CRON_SECRET;
+}
+
+interface PendingReview {
+  id: string;
+  tenant_id: string;
+  location_id: string;
+  star_rating: number;
+  review_text: string;
 }
 
 export async function POST(request: Request) {
@@ -40,50 +62,33 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // This route processes pending reviews across every tenant in one batch
-  // (matching pg_cron's own scope) — the auth check above just gates who
-  // can trigger it, so the actual work always runs as service-role.
+  // Processes pending reviews across every tenant (matching pg_cron's own
+  // scope) — the auth check above only gates who can trigger it, so callers
+  // get no review ids, counts, or error text back.
+  after(() => analyzePending(trigger === "scheduled_catchup"));
+  return NextResponse.json({ started: true });
+}
+
+async function analyzePending(isCatchUp: boolean) {
   const supabase = createServiceClient();
 
-  // Find reviews with no analysis yet, excluding those with null review_text
-  // (already purged — can't analyze what we don't have). PostgREST filters
-  // aren't raw SQL, so "not in (select ...)" has to be two queries: pull
-  // already-analyzed ids, then exclude them from the candidate set.
-  const { data: analyzedRows, error: analyzedErr } = await supabase
-    .from("review_analyses")
-    .select("review_id");
-
-  if (analyzedErr) {
-    return NextResponse.json({ error: analyzedErr.message }, { status: 500 });
+  if (isCatchUp) {
+    const { data: last } = await supabase
+      .from("review_analyses")
+      .select("analyzed_at")
+      .order("analyzed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (last && Date.now() - new Date(last.analyzed_at).getTime() < ACTIVE_RUN_MS) return;
   }
 
-  const analyzedIds = (analyzedRows ?? []).map((r) => r.review_id);
-  // A guaranteed-nonexistent id keeps this a single fluent chain (reassigning
-  // the query builder to a `let` blows up TS with "excessively deep" errors)
-  // while still excluding nothing when no reviews have been analyzed yet.
-  const excludeIds = analyzedIds.length > 0 ? analyzedIds.join(",") : "00000000-0000-0000-0000-000000000000";
+  const since = new Date(importCutoffMs()).toISOString();
+  const started = Date.now();
+  const failed = new Set<string>();
+  let succeeded = 0;
+  let moreLeft = false;
 
-  const { data: pending, error } = await supabase
-    .from("reviews")
-    .select("id, tenant_id, location_id, star_rating, review_text")
-    .not("review_text", "is", null)
-    .not("id", "in", `(${excludeIds})`)
-    .order("ingested_at", { ascending: true })
-    .limit(BATCH_SIZE);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  if (!pending?.length) {
-    return NextResponse.json({ analyzed: 0, message: "No pending reviews" });
-  }
-
-  const results: { review_id: string; success: boolean; error?: string }[] = [];
-
-  for (const review of pending) {
-    if (!review.review_text) continue;
-
+  async function analyzeOne(review: PendingReview): Promise<boolean> {
     try {
       const analysis = await analyzeReview({
         review_id: review.id,
@@ -91,7 +96,6 @@ export async function POST(request: Request) {
         review_text: review.review_text,
       });
 
-      // Insert review_analyses row
       const { data: analysisRow, error: analysisErr } = await supabase
         .from("review_analyses")
         .insert({
@@ -105,71 +109,66 @@ export async function POST(request: Request) {
         })
         .select("id")
         .single();
-
       if (analysisErr || !analysisRow) throw new Error(analysisErr?.message);
 
-      // Insert per-category scores
       if (analysis.categories.length > 0) {
-        const categoryRows = analysis.categories.map((c) => ({
-          tenant_id: review.tenant_id,
-          analysis_id: analysisRow.id,
-          review_id: review.id,
-          category: c.category,
-          sentiment_score: c.sentiment_score,
-          confidence: c.confidence,
-        }));
-
-        const { error: catErr } = await supabase
-          .from("review_categories")
-          .insert(categoryRows);
-
+        const { error: catErr } = await supabase.from("review_categories").insert(
+          analysis.categories.map((c) => ({
+            tenant_id: review.tenant_id,
+            analysis_id: analysisRow.id,
+            review_id: review.id,
+            category: c.category,
+            sentiment_score: c.sentiment_score,
+            confidence: c.confidence,
+          }))
+        );
         if (catErr) throw new Error(catErr.message);
       }
-
-      results.push({ review_id: review.id, success: true });
-
+      return true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`Analysis failed for review ${review.id}:`, msg);
-      results.push({ review_id: review.id, success: false, error: msg });
+      console.error(`Analysis failed for review ${review.id}:`, err instanceof Error ? err.message : err);
+      // Skipped for the rest of this run so one bad review can't loop it;
+      // a later run retries it. (Two overlapping runs can't double-count:
+      // review_analyses.review_id is unique, so the second insert fails.)
+      failed.add(review.id);
+      return false;
     }
   }
 
-  const succeeded = results.filter((r) => r.success).length;
+  while (Date.now() - started < TIME_BUDGET_MS) {
+    // Newest first, so a fresh location's most relevant reviews land first.
+    const { data, error } = await supabase.rpc("pending_analysis_reviews", {
+      p_since: since,
+      p_limit: BATCH_SIZE + failed.size,
+    });
+    if (error) {
+      console.error("pending_analysis_reviews failed:", error);
+      break;
+    }
+    const batch = ((data ?? []) as PendingReview[]).filter((r) => !failed.has(r.id)).slice(0, BATCH_SIZE);
+    if (batch.length === 0) {
+      moreLeft = false;
+      break;
+    }
+    for (let i = 0; i < batch.length; i += CONCURRENCY) {
+      const outcomes = await Promise.all(batch.slice(i, i + CONCURRENCY).map(analyzeOne));
+      succeeded += outcomes.filter(Boolean).length;
+    }
+    moreLeft = true;
+  }
 
-  // Both of these run via after() — a plain un-awaited fetch() gets cut
-  // off when the serverless function tears down right after the response
-  // is sent, so the self-chain and rollup trigger below would silently
-  // never happen otherwise.
+  if (succeeded === 0) return;
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+  const internal = (path: string, payload: object) =>
+    fetch(`${appUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-cron-secret": CRON_SECRET ?? "" },
+      body: JSON.stringify(payload),
+    }).catch((e) => console.error(`Failed to trigger ${path}:`, e));
 
-  // If we processed a full batch, there may be more — re-queue
-  if (pending.length === BATCH_SIZE) {
-    after(() =>
-      fetch(`${appUrl}/api/reviews/analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-cron-secret": CRON_SECRET ?? "",
-        },
-        body: JSON.stringify({ trigger: "post_sync" }),
-      }).catch(() => {})
-    );
-  }
-
-  // Trigger rollup recomputation
-  if (succeeded > 0) {
-    after(() =>
-      fetch(`${appUrl}/api/rollup/compute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-cron-secret": CRON_SECRET ?? "",
-        },
-        body: JSON.stringify({ trigger: "post_analysis" }),
-      }).catch(() => {})
-    );
-  }
-
-  return NextResponse.json({ analyzed: succeeded, total: pending.length, results });
+  await Promise.all([
+    internal("/api/rollup/compute", { trigger: "post_analysis" }),
+    moreLeft ? internal("/api/reviews/analyze", { trigger: "post_sync" }) : null,
+  ]);
 }
