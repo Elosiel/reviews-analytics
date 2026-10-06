@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { MOCK_LOCATIONS, MOCK_MEETINGS, MOCK_SOPS } from "@/lib/mock-data";
 import type { Location, Sop } from "@/types";
-import MeetingsPageClient, { rowToMeeting } from "@/components/dashboard/MeetingsPageClient";
+import MeetingsPageClient from "@/components/dashboard/MeetingsPageClient";
+import { rowToMeeting } from "@/lib/data/meetings";
 
 export default async function MeetingsPage() {
   const supabase = await createClient();

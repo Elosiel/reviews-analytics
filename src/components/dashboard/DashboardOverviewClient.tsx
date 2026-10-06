@@ -100,9 +100,9 @@ export default function DashboardOverviewClient({
     loves.find((i) => i.location_id === weakestLocation.id)?.quotes[0] ??
     "";
 
-  function focusWeakestLink(locationId?: string) {
+  function focusWeakestLink(locationId?: string, tab: TabId = "issues") {
     setSelectedLocations([locationId ?? weakestLocation.id]);
-    setActiveTab("issues");
+    setActiveTab(tab);
     issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -178,7 +178,11 @@ export default function DashboardOverviewClient({
               cell={matrix[weakestLocation.id][weakestCategory]}
               openIssueCount={weakestIssues.length}
               topQuote={weakestTopQuote}
-              onReview={() => focusWeakestLink()}
+              // No open issues there means an empty "Fix these first" list —
+              // open that location's reviews instead.
+              onReview={() =>
+                focusWeakestLink(undefined, weakestIssues.length > 0 ? "issues" : "reviews")
+              }
             />
             <GroupTrendChart data={groupTrend} />
           </div>

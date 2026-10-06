@@ -26,6 +26,9 @@ import { generateMeetingAgenda, type MeetingAgendaSourceIssue } from "@/lib/pipe
 import { DRIFT_THRESHOLD } from "@/types";
 import type { AlertSeverity, RestaurantProfile, SentimentCategory } from "@/types";
 
+// A multi-issue agenda from Claude can take well over the default timeout.
+export const maxDuration = 60;
+
 const ALL_CATEGORIES: SentimentCategory[] = [
   "food", "service", "atmosphere", "value", "wait_time", "cleanliness",
 ];
@@ -194,7 +197,16 @@ export async function POST(request: Request) {
     menu_url: profileCtx?.menu_url ?? "",
   };
 
-  const agenda = await generateMeetingAgenda(topIssues, profile);
+  let agenda: Awaited<ReturnType<typeof generateMeetingAgenda>>;
+  try {
+    agenda = await generateMeetingAgenda(topIssues, profile);
+  } catch (err) {
+    console.error("Meeting agenda generation failed:", err);
+    return NextResponse.json(
+      { error: "We couldn't write this agenda just now. Please try again in a moment." },
+      { status: 502 }
+    );
+  }
 
   const locationLabel = requestedLocationIds
     ? locations.map((l) => l.name).join(", ")

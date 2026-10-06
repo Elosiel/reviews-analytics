@@ -14,6 +14,9 @@ import { createClient } from "@/lib/supabase/server";
 import { draftSop, type SopTriggerLocation } from "@/lib/pipeline/claude";
 import type { RestaurantProfile, SentimentCategory } from "@/types";
 
+// A full SOP draft from Claude can take well over the default timeout.
+export const maxDuration = 60;
+
 const VALID_CATEGORIES: SentimentCategory[] = [
   "food", "service", "atmosphere", "value", "wait_time", "cleanliness",
 ];
@@ -135,7 +138,16 @@ export async function POST(request: Request) {
     }
   }
 
-  const draft = await draftSop(category, triggerLocations, profile);
+  let draft: Awaited<ReturnType<typeof draftSop>>;
+  try {
+    draft = await draftSop(category, triggerLocations, profile);
+  } catch (err) {
+    console.error("SOP draft failed:", err);
+    return NextResponse.json(
+      { error: "We couldn't draft this SOP just now. Please try again in a moment." },
+      { status: 502 }
+    );
+  }
 
   const { data: sop, error: sopErr } = await supabase
     .from("sops")
