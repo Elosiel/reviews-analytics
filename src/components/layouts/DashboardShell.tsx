@@ -127,8 +127,13 @@ export default function DashboardShell({
       </nav>
 
       {/* Drift alert callout */}
+      {/* Unresolved drift alerts are listed (with a "Draft SOP" action) on
+          the SOPs page — that's where this card takes you. */}
       {driftAlertCount > 0 && (
-        <div className="mx-3 mb-3 rounded-xl bg-[#fbeeea] border border-neg/20 p-3 space-y-1">
+        <Link
+          href="/dashboard/sops"
+          className="block mx-3 mb-3 rounded-xl bg-[#fbeeea] border border-neg/20 p-3 space-y-1 hover:border-neg/40 transition-colors"
+        >
           <div className="flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-neg" />
             <span className="text-xs font-semibold text-[#7a1f13]">
@@ -136,9 +141,9 @@ export default function DashboardShell({
             </span>
           </div>
           <p className="text-xs text-[#8a5347]">
-            Declining sentiment detected. Check your overview.
+            Declining sentiment detected. Review it and draft a fix →
           </p>
-        </div>
+        </Link>
       )}
 
       {/* User */}

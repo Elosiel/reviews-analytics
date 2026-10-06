@@ -6,6 +6,7 @@ import MeetingHistoryCard from "@/components/dashboard/MeetingHistoryCard";
 import MeetingAgendaModal from "@/components/dashboard/MeetingAgendaModal";
 import { createClient } from "@/lib/supabase/client";
 import { CATEGORY_LABELS } from "@/lib/design";
+import { rowToMeeting } from "@/lib/data/meetings";
 import { MOCK_RANKED_ISSUES, MOCK_MEETING_QUOTES } from "@/lib/mock-data";
 import type {
   Location,
@@ -26,26 +27,6 @@ function defaultDateRange() {
   const start = new Date();
   start.setDate(start.getDate() - 7);
   return { start: isoDate(start), end: isoDate(end) };
-}
-
-// DB row (flat columns) → UI Meeting shape (nested filters)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToMeeting(row: any): Meeting {
-  return {
-    id: row.id,
-    tenant_id: row.tenant_id,
-    title: row.title,
-    filters: {
-      location_ids: row.location_ids ?? null,
-      city: row.city ?? null,
-      categories: row.categories ?? null,
-      date_start: row.date_start,
-      date_end: row.date_end,
-    },
-    agenda: (row.agenda ?? []) as MeetingAgendaIssue[],
-    generated_at: row.generated_at,
-    created_by: row.created_by,
-  };
 }
 
 // Demo-mode agenda builder (real mode uses /api/meetings/generate + Claude)
@@ -194,8 +175,11 @@ export default function MeetingsPageClient({
           date_end: dateEnd,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to generate meeting");
+      // A timeout or crash can return an empty body — never surface a raw parse error.
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? "We couldn't write this agenda just now. Please try again in a moment.");
+      }
       const meeting = rowToMeeting(data.data);
       setMeetings((prev) => [meeting, ...prev]);
       await openMeetingWithQuotes(meeting);

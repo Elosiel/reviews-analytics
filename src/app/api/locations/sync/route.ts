@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { listAccounts, listLocations } from "@/lib/google/business-profile";
-import { decryptToken } from "@/lib/google/token-crypto";
+import { getValidAccessToken } from "@/lib/pipeline/tokens";
+import { describeGoogleError } from "@/lib/google/errors";
 
 // GET — fetch available locations from Google Business Profile
 // Called from onboarding after GBP OAuth completes.
@@ -15,22 +17,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get stored (encrypted) tokens
-  const { data: tokenRow } = await supabase
-    .from("google_tokens")
-    .select("access_token_enc, expires_at")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!tokenRow) {
-    return NextResponse.json(
-      { error: "Google account not connected. Please connect first." },
-      { status: 400 }
-    );
-  }
-
   try {
-    const accessToken = decryptToken(tokenRow.access_token_enc);
+    // Refreshes the stored token if it's near expiry; throws GoogleReauthError
+    // if there's no token or Google refuses the refresh.
+    const accessToken = await getValidAccessToken(createServiceClient(), user.id);
 
     // Fetch all accounts then all locations
     const accountsData = await listAccounts(accessToken);
@@ -65,13 +55,24 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ locations });
+    // Mark locations this tenant already tracks so a reconnect starts with
+    // them selected (RLS scopes this read to the caller's own tenant).
+    const { data: trackedRows } = await supabase
+      .from("locations")
+      .select("google_location_id")
+      .in("google_location_id", locations.map((l) => l.google_location_id));
+    const tracked = new Set((trackedRows ?? []).map((r) => r.google_location_id));
+
+    // account_count lets onboarding tell "this Google user manages no
+    // Business Profiles" apart from "profiles exist but have no locations".
+    return NextResponse.json({
+      locations: locations.map((l) => ({ ...l, tracked: tracked.has(l.google_location_id) })),
+      account_count: accounts.length,
+    });
   } catch (err) {
     console.error("Location sync error:", err);
-    return NextResponse.json(
-      { error: "Failed to fetch locations from Google." },
-      { status: 500 }
-    );
+    const info = describeGoogleError(err);
+    return NextResponse.json({ error: info.message, kind: info.kind }, { status: 502 });
   }
 }
 

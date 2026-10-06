@@ -10,6 +10,7 @@ import ProofOfImpactCard from "@/components/dashboard/ProofOfImpactCard";
 import MondayBriefCard from "@/components/dashboard/MondayBriefCard";
 import WeakestLinkSpotlight from "@/components/dashboard/WeakestLinkSpotlight";
 import CrossLocationHeatmap from "@/components/dashboard/CrossLocationHeatmap";
+import ConnectionStatusBanner from "@/components/dashboard/ConnectionStatusBanner";
 import GroupTrendChart from "@/components/charts/GroupTrendChart";
 import SentimentTrendChart from "@/components/charts/SentimentTrendChart";
 import type {
@@ -21,6 +22,7 @@ import type {
   DriftAlert,
 } from "@/types";
 import type { ReviewListItem, TrendPoint, WeekSummary } from "@/lib/data/dashboard";
+import type { AnalysisState } from "@/lib/data/analysis-status";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, CATEGORY_LABELS, fmtScore, scoreInk } from "@/lib/design";
 
@@ -37,6 +39,7 @@ interface DashboardOverviewClientProps {
   groupTrend: TrendPoint[];
   trendsByCategory: Record<SentimentCategory, TrendPoint[]>;
   reviews: ReviewListItem[];
+  analysis: AnalysisState;
 }
 
 export default function DashboardOverviewClient({
@@ -50,10 +53,18 @@ export default function DashboardOverviewClient({
   groupTrend,
   trendsByCategory,
   reviews,
+  analysis,
 }: DashboardOverviewClientProps) {
+  // The spotlight, heatmap, and group trend only mean something once rollups
+  // exist — before that they'd name a "weakest link" off empty 0.00 cells.
+  const hasAnalytics = Object.values(matrix).some((row) =>
+    Object.values(row).some((cell) => cell.mentions > 0)
+  );
+
   // Multi-select: empty = all locations; pills toggle membership
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<TabId>("issues");
+  // Before analysis lands, open on the real imported reviews.
+  const [activeTab, setActiveTab] = useState<TabId>(hasAnalytics ? "issues" : "reviews");
   const [exportIssue, setExportIssue] = useState<RankedIssue | null>(null);
   const issuesRef = useRef<HTMLDivElement>(null);
 
@@ -89,9 +100,9 @@ export default function DashboardOverviewClient({
     loves.find((i) => i.location_id === weakestLocation.id)?.quotes[0] ??
     "";
 
-  function focusWeakestLink(locationId?: string) {
+  function focusWeakestLink(locationId?: string, tab: TabId = "issues") {
     setSelectedLocations([locationId ?? weakestLocation.id]);
-    setActiveTab("issues");
+    setActiveTab(tab);
     issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -145,6 +156,10 @@ export default function DashboardOverviewClient({
         </h1>
       </div>
 
+      {/* ── Connection + analysis status — real Google figures and honest
+          progress until the ranked views have data ── */}
+      <ConnectionStatusBanner analysis={analysis} locations={locations} />
+
       <ScoreScaleNote />
 
       {/* ── Monday brief — the headline story, delivered ── */}
@@ -153,25 +168,33 @@ export default function DashboardOverviewClient({
       {/* ── Danger flags first, always ── */}
       <NeedsAttentionBanner items={needsAttention} />
 
-      {/* ── Spotlight + whole-business trend ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        <WeakestLinkSpotlight
-          location={weakestLocation}
-          worstCategory={weakestCategory}
-          cell={matrix[weakestLocation.id][weakestCategory]}
-          openIssueCount={weakestIssues.length}
-          topQuote={weakestTopQuote}
-          onReview={() => focusWeakestLink()}
-        />
-        <GroupTrendChart data={groupTrend} />
-      </div>
+      {hasAnalytics && (
+        <>
+          {/* ── Spotlight + whole-business trend ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+            <WeakestLinkSpotlight
+              location={weakestLocation}
+              worstCategory={weakestCategory}
+              cell={matrix[weakestLocation.id][weakestCategory]}
+              openIssueCount={weakestIssues.length}
+              topQuote={weakestTopQuote}
+              // No open issues there means an empty "Fix these first" list —
+              // open that location's reviews instead.
+              onReview={() =>
+                focusWeakestLink(undefined, weakestIssues.length > 0 ? "issues" : "reviews")
+              }
+            />
+            <GroupTrendChart data={groupTrend} />
+          </div>
 
-      {/* ── Cross-location heatmap ── */}
-      <CrossLocationHeatmap
-        locations={locations}
-        matrix={matrix}
-        onSelectLocation={(id) => focusWeakestLink(id)}
-      />
+          {/* ── Cross-location heatmap ── */}
+          <CrossLocationHeatmap
+            locations={locations}
+            matrix={matrix}
+            onSelectLocation={(id) => focusWeakestLink(id)}
+          />
+        </>
+      )}
 
       {/* ── The ranked list ── */}
       <div ref={issuesRef} className="scroll-mt-6">
@@ -247,7 +270,9 @@ export default function DashboardOverviewClient({
           <div className="space-y-3">
             {filteredIssues.length === 0 ? (
               <p className="text-center py-12 text-sm text-ink-faint">
-                Nothing needs fixing at this location. Enjoy it.
+                {hasAnalytics
+                  ? "Nothing needs fixing at this location. Enjoy it."
+                  : "No ranked issues yet — they appear once there's analyzed feedback from the last 30 days."}
               </p>
             ) : (
               filteredIssues.map((issue, i) => (
@@ -307,18 +332,20 @@ export default function DashboardOverviewClient({
                       <span className="font-heading text-[15px] font-semibold text-ink">
                         {CATEGORY_LABELS[cat]}
                       </span>
-                      <span
-                        className="text-sm font-bold tabular-nums"
-                        style={{ color: scoreInk(lastScore) }}
-                      >
-                        {fmtScore(lastScore)}
+                      {data.length > 0 && (
                         <span
-                          className="text-[11px] font-semibold ml-1.5"
-                          style={{ color: scoreInk(change) }}
+                          className="text-sm font-bold tabular-nums"
+                          style={{ color: scoreInk(lastScore) }}
                         >
-                          {change < 0 ? "▼" : "▲"} {fmtScore(change)}
+                          {fmtScore(lastScore)}
+                          <span
+                            className="text-[11px] font-semibold ml-1.5"
+                            style={{ color: scoreInk(change) }}
+                          >
+                            {change < 0 ? "▼" : "▲"} {fmtScore(change)}
+                          </span>
                         </span>
-                      </span>
+                      )}
                     </div>
                     {data.length > 0 ? (
                       <SentimentTrendChart data={data} id={cat} />

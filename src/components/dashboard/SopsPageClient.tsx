@@ -124,8 +124,11 @@ export default function SopsPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category: alert.category, drift_alert_id: alert.id }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Draft failed");
+      // A timeout or crash can return an empty body — never surface a raw parse error.
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? "We couldn't draft this SOP just now. Please try again in a moment.");
+      }
       setSops((prev) => [data.data as Sop, ...prev]);
       router.refresh();
     } catch (e: unknown) {

@@ -95,7 +95,7 @@ export default function WeakestLinkSpotlight({
           onClick={onReview}
           className="inline-flex items-center gap-1.5 bg-[#f8ece7] text-[#33150e] text-[13px] font-semibold rounded-xl px-4 py-2.5 hover:bg-white transition-colors"
         >
-          See the fix plan
+          {openIssueCount > 0 ? "See the fix plan" : "See what guests say"}
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

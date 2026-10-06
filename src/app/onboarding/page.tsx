@@ -3,9 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import RestaurantProfileForm from "@/components/shared/RestaurantProfileForm";
+import { oauthCallbackErrorMessage, type GoogleErrorKind } from "@/lib/google/errors";
+import { REVIEW_IMPORT_WINDOW_DAYS } from "@/lib/reviews/import-window";
 
 type Step = "connect" | "select" | "profile" | "syncing" | "done";
 
@@ -14,7 +15,25 @@ interface GBPLocation {
   google_account_id: string;
   name: string;
   address: string;
+  tracked?: boolean;
 }
+
+interface SyncResult {
+  location_id: string;
+  location_name: string;
+  inserted: number;
+  average_rating?: number | null;
+  total_review_count?: number | null;
+  error?: string;
+  error_kind?: GoogleErrorKind;
+}
+
+const PRIVACY_POLICY_URL = "https://reviewsanalytics.ai/privacy";
+const GOOGLE_PERMISSIONS_URL = "https://myaccount.google.com/permissions";
+
+// A connection that needs the user to go back through Google's consent.
+const needsReconnect = (kind: GoogleErrorKind | null) =>
+  kind === "reconnect" || kind === "permission";
 
 export default function OnboardingPage() {
   return (
@@ -34,32 +53,45 @@ function OnboardingInner() {
     if (searchParams.get("gbp") === "connected") {
       fetchLocations();
     }
-    if (searchParams.get("error")) {
-      setError(`Google connection failed: ${searchParams.get("error")}`);
+    const callbackError = searchParams.get("error");
+    if (callbackError) {
+      setError(oauthCallbackErrorMessage(callbackError));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [locations, setLocations] = useState<GBPLocation[]>([]);
+  const [accountCount, setAccountCount] = useState<number | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when loading locations from Google failed (not for OAuth
+  // callback errors) — those can be retried without reconnecting.
+  const [locationsErrorKind, setLocationsErrorKind] = useState<GoogleErrorKind | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [syncSummary, setSyncSummary] = useState<{ synced: number; inserted: number } | null>(null);
+  const [syncErrorKind, setSyncErrorKind] = useState<GoogleErrorKind | null>(null);
+  const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
 
   // Called after Google Business Profile OAuth completes and returns to this page
   // with ?gbp=connected in the URL
   async function fetchLocations() {
     setLoadingLocations(true);
     setError(null);
+    setLocationsErrorKind(null);
     try {
       const res = await fetch("/api/locations/sync");
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setLocations(data.locations ?? []);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setLocationsErrorKind(data?.kind ?? "unavailable");
+        throw new Error(data?.error ?? "We couldn't load your locations from Google. Try again in a moment.");
+      }
+      const found: GBPLocation[] = data.locations ?? [];
+      setLocations(found);
+      setSelected(new Set(found.filter((l) => l.tracked).map((l) => l.google_location_id)));
+      setAccountCount(typeof data.account_count === "number" ? data.account_count : null);
       setStep("select");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load locations.");
+      setError(e instanceof Error ? e.message : "We couldn't load your locations from Google.");
     } finally {
       setLoadingLocations(false);
     }
@@ -82,23 +114,38 @@ function OnboardingInner() {
   async function runInitialSync() {
     setStep("syncing");
     setSyncError(null);
+    setSyncErrorKind(null);
     try {
       const res = await fetch("/api/reviews/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trigger: "manual" }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      const failed: { location_id: string; error?: string }[] = data.results ?? [];
-      const firstError = failed.find((r) => r.error)?.error;
-      if (firstError) throw new Error(firstError);
-      setSyncSummary({ synced: data.synced ?? 0, inserted: data.inserted ?? 0 });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        throw new Error("We couldn't start the import. Try again in a moment.");
+      }
+      if (data.no_locations) {
+        setSyncErrorKind("reconnect");
+        throw new Error(
+          "None of your locations can be imported right now — the Google connection needs to be renewed. Reconnect Google to continue."
+        );
+      }
+      const results: SyncResult[] = data.results ?? [];
+      const failed = results.find((r) => r.error);
+      if (failed) {
+        setSyncErrorKind(failed.error_kind ?? "unavailable");
+        throw new Error(`${failed.location_name}: ${failed.error}`);
+      }
+      setSyncResults(results);
       setStep("done");
     } catch (e: unknown) {
-      setSyncError(e instanceof Error ? e.message : "Failed to sync reviews.");
+      setSyncError(e instanceof Error ? e.message : "We couldn't import your reviews.");
     }
   }
+
+  const importedCount = syncResults.reduce((sum, r) => sum + r.inserted, 0);
+  const googleReviewTotal = syncResults.reduce((sum, r) => sum + (r.total_review_count ?? 0), 0);
 
   async function saveAndSync() {
     if (selected.size === 0) return;
@@ -230,10 +277,79 @@ function OnboardingInner() {
                 </div>
               </div>
 
-              {error && (
-                <p className="text-sm text-red-500 bg-red-50 rounded-lg px-4 py-3">
-                  {error}
+              {/* Google's consent screen describes the whole business.manage
+                  scope — the only one its Business Profile API offers. Explain
+                  that here, before the redirect, so it isn't a surprise there. */}
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-5 space-y-3">
+                <p className="text-sm font-medium text-zinc-800">
+                  Why does Google show broad permissions?
                 </p>
+                <p className="text-sm text-zinc-600 leading-relaxed">
+                  Google bundles all Business Profile access into one
+                  permission, so its screen may say an app can create, edit, or
+                  delete listings, or make another Google user the owner of
+                  your business listing. That&apos;s Google&apos;s standard
+                  wording — every app that connects to Google Business Profile
+                  sees this same screen.
+                </p>
+                <ul className="space-y-1.5 text-sm text-zinc-600">
+                  <li>
+                    <span className="font-medium text-zinc-800">What we do:</span>{" "}
+                    read your locations and reviews to build your reports.
+                  </li>
+                  <li>
+                    <span className="font-medium text-zinc-800">What we never do:</span>{" "}
+                    post or reply to reviews, edit or delete your listing, or
+                    change its owners or managers.
+                  </li>
+                  <li>
+                    <span className="font-medium text-zinc-800">You stay in control:</span>{" "}
+                    you remain the owner, and you can revoke our access anytime
+                    in your{" "}
+                    <a
+                      href={GOOGLE_PERMISSIONS_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2 hover:text-zinc-900"
+                    >
+                      Google Account permissions
+                    </a>
+                    .
+                  </li>
+                </ul>
+                <p className="text-sm text-zinc-800">
+                  <span className="font-medium">On Google&apos;s screen, tick the box for</span>{" "}
+                  &ldquo;See, edit, create and delete your Google business
+                  listings.&rdquo; Google leaves it unticked, and without it we
+                  can&apos;t read your reviews.
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Details in our{" "}
+                  <a
+                    href={PRIVACY_POLICY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:text-zinc-700"
+                  >
+                    Privacy Policy
+                  </a>
+                  .
+                </p>
+              </div>
+
+              {error && (
+                <div className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3 space-y-2">
+                  <p>{error}</p>
+                  {locationsErrorKind && !needsReconnect(locationsErrorKind) && (
+                    <button
+                      onClick={fetchLocations}
+                      disabled={loadingLocations}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      {loadingLocations ? "Retrying…" : "Try again"}
+                    </button>
+                  )}
+                </div>
               )}
 
               <div className="flex flex-col sm:flex-row gap-3">
@@ -245,7 +361,7 @@ function OnboardingInner() {
                   className="bg-zinc-900 hover:bg-zinc-800 text-white h-11 px-6 gap-2"
                 >
                   <GoogleIcon />
-                  Connect Google Business Profile
+                  {needsReconnect(locationsErrorKind) ? "Reconnect Google" : "Connect Google Business Profile"}
                 </Button>
 
                 {/* Dev shortcut — skip OAuth if credentials not set up yet */}
@@ -288,9 +404,14 @@ function OnboardingInner() {
                 </div>
               ) : locations.length === 0 ? (
                 <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center space-y-2">
-                  <p className="text-zinc-500">No locations found on this account.</p>
+                  <p className="text-zinc-500">
+                    {accountCount === 0
+                      ? "Connected — but this Google account doesn't own or manage any Business Profiles."
+                      : "Connected — but no locations were found on the Business Profiles this Google account manages."}
+                  </p>
                   <p className="text-sm text-zinc-400">
-                    Make sure you&apos;re connected to the correct Google account.
+                    Make sure you signed in with the Google account that owns or
+                    manages your restaurant&apos;s listing.
                   </p>
                   <Button
                     variant="outline"
@@ -319,6 +440,11 @@ function OnboardingInner() {
                             <div className="space-y-0.5">
                               <p className="font-medium text-zinc-900">
                                 {loc.name}
+                                {loc.tracked && (
+                                  <span className="ml-2 text-xs font-normal text-emerald-600">
+                                    Already tracked
+                                  </span>
+                                )}
                               </p>
                               <p className="text-sm text-zinc-500">
                                 {loc.address}
@@ -487,12 +613,26 @@ function OnboardingInner() {
                 </h2>
                 <p className="text-zinc-500">{syncError}</p>
               </div>
-              <Button
-                onClick={runInitialSync}
-                className="bg-zinc-900 hover:bg-zinc-800 text-white h-11 px-8"
-              >
-                Try again
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                {needsReconnect(syncErrorKind) ? (
+                  <Button
+                    onClick={() => {
+                      window.location.href = "/api/google/connect";
+                    }}
+                    className="bg-zinc-900 hover:bg-zinc-800 text-white h-11 px-8 gap-2"
+                  >
+                    <GoogleIcon />
+                    Reconnect Google
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={runInitialSync}
+                    className="bg-zinc-900 hover:bg-zinc-800 text-white h-11 px-8"
+                  >
+                    Try again
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -519,11 +659,37 @@ function OnboardingInner() {
                   You&apos;re all set
                 </h2>
                 <p className="text-zinc-500">
-                  {syncSummary && syncSummary.inserted > 0
-                    ? `Your locations are connected — ${syncSummary.inserted} review${syncSummary.inserted !== 1 ? "s" : ""} synced. We're analyzing them now; your ranked report will fill in over the next few minutes.`
-                    : "Your locations are connected. We didn't find any reviews yet — new ones will sync in automatically."}
+                  {importedCount > 0
+                    ? `Connected to Google — ${importedCount} review${importedCount !== 1 ? "s" : ""} from the last ${REVIEW_IMPORT_WINDOW_DAYS} days imported. We're analyzing them now; your rankings fill in over the next few minutes, and your reviews are already on the dashboard.`
+                    : googleReviewTotal > 0
+                    ? `Connected to Google. None of these locations' reviews are from the last ${REVIEW_IMPORT_WINDOW_DAYS} days, which is the window rankings cover — new ones will come in automatically.`
+                    : "Connected to Google. These locations don't have any reviews on Google yet — new ones will come in automatically."}
                 </p>
               </div>
+
+              {/* Straight from Google's reviews response — the listing's own
+                  rating and review total, before any analysis has run. */}
+              {syncResults.length > 0 && (
+                <div className="rounded-lg border border-zinc-100 divide-y divide-zinc-100 text-left">
+                  {syncResults.map((r) => (
+                    <div key={r.location_id} className="flex items-center justify-between gap-4 px-4 py-3">
+                      <span className="text-sm font-medium text-zinc-900 truncate">
+                        {r.location_name}
+                      </span>
+                      <span className="text-sm text-zinc-500 tabular-nums shrink-0">
+                        {typeof r.average_rating === "number" && (
+                          <>
+                            {r.average_rating.toFixed(1)}
+                            <span className="text-amber-500">★</span>
+                            {" · "}
+                          </>
+                        )}
+                        {r.total_review_count ?? 0} review{r.total_review_count !== 1 ? "s" : ""} on Google
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Button
                   onClick={() => router.push("/dashboard")}
@@ -531,21 +697,6 @@ function OnboardingInner() {
                 >
                   Go to my dashboard
                 </Button>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
-                {Array.from(selected).slice(0, 5).map((id) => {
-                  const loc = locations.find((l) => l.google_location_id === id);
-                  return loc ? (
-                    <Badge key={id} variant="secondary" className="text-xs">
-                      {loc.name}
-                    </Badge>
-                  ) : null;
-                })}
-                {selected.size > 5 && (
-                  <Badge variant="secondary" className="text-xs">
-                    +{selected.size - 5} more
-                  </Badge>
-                )}
               </div>
             </div>
           )}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
 import { encryptToken } from "@/lib/google/token-crypto";
+import { hasBusinessProfileScope } from "@/lib/google/errors";
 
 // Handles the OAuth callback from Google after the user grants access.
 // Exchanges the code for tokens, encrypts them, and stores in google_tokens.
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   if (error || !code || !state) {
     const reason = error ?? "missing_code";
     return NextResponse.redirect(
-      `${appUrl}/onboarding?error=${reason}`
+      `${appUrl}/onboarding?error=${encodeURIComponent(reason)}`
     );
   }
 
@@ -36,6 +37,13 @@ export async function GET(request: Request) {
 
   try {
     const tokens = await exchangeCodeForTokens(code);
+
+    // Google's consent screen lets the user untick individual permissions.
+    // Without Business Profile access the token can't read a single location,
+    // so don't store it (or replace a working one) and don't report success.
+    if (!hasBusinessProfileScope(tokens.scope)) {
+      return NextResponse.redirect(`${appUrl}/onboarding?error=insufficient_scope`);
+    }
 
     // Encrypt tokens before storing — encryptToken returns a "\x"-hex
     // bytea literal string; pass it straight through, never wrap in Buffer
