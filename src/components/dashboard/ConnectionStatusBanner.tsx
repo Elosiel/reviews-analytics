@@ -70,7 +70,7 @@ function copyFor(a: AnalysisState, googleReviewTotal: number): Copy | null {
     case "stalled":
       return {
         title: `Analysis paused at ${a.analyzed} of ${a.analyzable}`,
-        body: "Analysis stopped making progress. Your imported reviews are safe — resume it here, or it restarts on its own with the next sync (within 6 hours).",
+        body: "Analysis stopped making progress. Your imported reviews are safe — resume it here, or it restarts on its own within a few minutes.",
         action: { label: "Resume analysis", run: resumeAnalysis },
       };
     case "finishing":
@@ -81,7 +81,7 @@ function copyFor(a: AnalysisState, googleReviewTotal: number): Copy | null {
     case "nothing_to_rank":
       return {
         title: "Your reviews are analyzed — nothing recent enough to rank yet",
-        body: `Rankings and trends cover the last 90 days, and there isn't enough recent written feedback yet. Your full history is under All reviews, and new reviews are checked every 6 hours.${starOnlyNote}`,
+        body: `Rankings and trends cover the last ${REVIEW_IMPORT_WINDOW_DAYS} days, and there isn't enough recent written feedback yet. Your full history is under All reviews, and new reviews are checked every 6 hours.${starOnlyNote}`,
       };
   }
 }
@@ -165,7 +165,7 @@ export default function ConnectionStatusBanner({
           <p className="text-[11px] uppercase tracking-[0.14em] text-ink-faint font-medium">
             {locations.length} location{locations.length !== 1 ? "s" : ""} connected to Google
             {" · "}
-            {analysis.totalReviews} review{analysis.totalReviews !== 1 ? "s" : ""} imported
+            {analysis.totalReviews} review{analysis.totalReviews !== 1 ? "s" : ""} from the last {REVIEW_IMPORT_WINDOW_DAYS} days
             {avgRating !== null && ` · ${avgRating.toFixed(1)}★ average on Google`}
           </p>
           <div>

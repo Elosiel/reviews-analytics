@@ -649,6 +649,35 @@ select cron.schedule(
   $$
 );
 
+-- Analysis catch-up (every 5 minutes). /api/reviews/analyze hands off to
+-- itself while a backlog remains, but Vercel stops an app calling itself
+-- after a few hops — this keeps a long backlog draining. The route returns
+-- at once and steps aside if a run is already going. (migration 20261006c)
+select cron.schedule(
+  'analysis-catch-up',
+  '*/5 * * * *',
+  $$
+    select net.http_post(
+      url := current_setting('app.base_url') || '/api/reviews/analyze',
+      headers := '{"Content-Type":"application/json","x-cron-secret":"' || current_setting('app.cron_secret') || '"}'::jsonb,
+      body := '{"trigger":"scheduled_catchup"}'::jsonb
+    );
+  $$
+);
+
+-- The analysis queue: unanalyzed reviews with text written since p_since
+-- (the 90-day import window), newest first. Older reviews are never analyzed.
+create or replace function public.pending_analysis_reviews(p_since timestamptz, p_limit int)
+returns table (id uuid, tenant_id uuid, location_id uuid, star_rating int, review_text text)
+language sql stable security invoker set search_path = public as $$
+  select r.id, r.tenant_id, r.location_id, r.star_rating, r.review_text
+  from public.reviews r
+  where r.review_text is not null and r.reviewed_at >= p_since
+    and not exists (select 1 from public.review_analyses a where a.review_id = r.id)
+  order by r.reviewed_at desc
+  limit p_limit;
+$$;
+
 -- ─────────────────────────────────────────────────────────────────
 -- TEAMS — owner/member roles and email invites (migration 20261006)
 -- ─────────────────────────────────────────────────────────────────

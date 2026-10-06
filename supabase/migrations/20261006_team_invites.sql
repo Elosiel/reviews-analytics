@@ -1,12 +1,11 @@
--- 1. Security: profiles were writable by their owner on every column, so a
---    signed-in user could change their own tenant_id (another restaurant's
---    data) or role (operator = admin). Users may now only READ their own
---    and their teammates' profiles; every write goes through the server
---    (service role) or a security-definer function.
-drop policy if exists "own profile" on public.profiles;
+-- Additive only — safe to apply while older code is live. The security
+-- lock-down of profiles is in 20261006b_lock_profiles.sql.
+
+-- 1. Teammate reads.
+-- Teammates (same tenant) can read each other's profiles. Added alongside
+-- the old "own profile" policy; 20261006b removes that one.
 create policy "read own team" on public.profiles for select
   using (id = auth.uid() or tenant_id = public.auth_tenant_id());
-revoke insert, update, delete, truncate on public.profiles from anon, authenticated;
 
 -- 2. Team roles. Everyone who exists today owns their own restaurant account.
 alter table public.profiles
@@ -45,7 +44,6 @@ create unique index if not exists team_invites_one_pending_per_email
 alter table public.team_invites enable row level security;
 create policy "team reads invites" on public.team_invites for select
   using (tenant_id = public.auth_tenant_id());
-revoke insert, update, delete, truncate on public.team_invites from anon, authenticated;
 
 -- 4. Accepting an invite moves the caller (and only the caller) into the
 --    inviting restaurant account, if the link is valid, unexpired, unused,
@@ -88,5 +86,4 @@ begin
   return 'joined';
 end;
 $$;
-revoke all on function public.accept_team_invite(text) from public, anon;
 grant execute on function public.accept_team_invite(text) to authenticated;

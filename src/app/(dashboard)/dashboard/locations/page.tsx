@@ -104,6 +104,31 @@ export default async function LocationsPage() {
             </div>
           );
         })}
+
+        {/* Every added store is billed per location, so the way to add one
+            sits right next to the stores already tracked. */}
+        {canAdd ? (
+          <a
+            href={addHref}
+            className="rounded-2xl border border-dashed border-line p-5 flex flex-col items-center justify-center text-center gap-1.5 hover:border-ink-faint hover:bg-paper transition-colors"
+          >
+            <span className="w-9 h-9 rounded-full bg-[#eef6f1] flex items-center justify-center">
+              <Plus className="w-4 h-4 text-forest" />
+            </span>
+            <span className="font-heading text-base font-semibold text-ink">Track another location</span>
+            <span className="text-xs text-ink-faint">
+              See how it compares with your other stores · $89/location/month
+            </span>
+          </a>
+        ) : (
+          data.hasRealData && (
+            <div className="rounded-2xl border border-dashed border-line p-5 flex items-center justify-center text-center">
+              <p className="text-xs text-ink-faint">
+                Want another store in this comparison? Ask your account owner to add it.
+              </p>
+            </div>
+          )
+        )}
       </div>
 
       {/* ── The heatmap ── */}
