@@ -432,6 +432,8 @@ export interface ReportQuoteSnapshot {
   location_id: string | null;
   location_name: string;
   quote_text: string | null;
+  /** Nulled with quote_text at content_purge_at; absent on older reports. */
+  reviewer_name?: string | null;
   star_rating: number | null;
   reviewed_at: string | null;
   content_purge_at: string;
