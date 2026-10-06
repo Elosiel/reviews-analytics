@@ -11,6 +11,14 @@ const FLAG_LABELS: Record<NeedsAttentionItem["flag"], string> = {
   physical_safety: "Physical safety",
 };
 
+function formatReviewDate(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  const ago = days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+  return `${date} (${ago})`;
+}
+
 /**
  * Danger-flag reviews (health/safety, legal, discrimination, physical safety)
  * are surfaced above everything else, regardless of category or star rating.
@@ -40,13 +48,19 @@ export default function NeedsAttentionBanner({
               <span className="font-heading text-base font-semibold text-[#7a1f13]">
                 Needs your attention today
               </span>
-              <span className="text-[11px] font-semibold uppercase tracking-wide bg-neg text-paper rounded-full px-2 py-0.5">
-                {FLAG_LABELS[item.flag]}
-              </span>
-              <span className="text-xs text-ink-faint">
-                {item.location_name} · {item.star_rating}★
-              </span>
+              {item.flags.map((f) => (
+                <span
+                  key={f}
+                  className="text-[11px] font-semibold uppercase tracking-wide bg-neg text-paper rounded-full px-2 py-0.5"
+                >
+                  {FLAG_LABELS[f]}
+                </span>
+              ))}
             </div>
+            <p className="mt-1.5 text-xs text-[#8a5347]">
+              <span className="font-semibold text-[#66261a]">{item.reviewer_name || "A Google reviewer"}</span>
+              {` · ${item.star_rating}★ · ${formatReviewDate(item.reviewed_at)} · ${item.location_name}`}
+            </p>
             <blockquote className="mt-2 text-sm text-[#66261a] italic border-l-2 border-neg/40 pl-3">
               &ldquo;{item.quote}&rdquo;
             </blockquote>

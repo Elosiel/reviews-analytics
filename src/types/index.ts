@@ -246,8 +246,12 @@ export interface NeedsAttentionItem {
   location_id: string;
   location_name: string;
   flag: DangerFlag;
+  /** Every flag raised, `flag` first. */
+  flags: DangerFlag[];
   star_rating: number;
   quote: string;
+  /** Kept as long as the text is (30-day rule); null if Google gave none. */
+  reviewer_name: string | null;
   reviewed_at: string;
 }
 
