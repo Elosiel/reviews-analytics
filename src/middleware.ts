@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextPath } from "@/lib/team/invite-shared";
 
 export async function middleware(request: NextRequest) {
   // Deployment not configured yet — show setup instructions instead of a 500
@@ -44,9 +45,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Authenticated: redirect away from login
+  // Authenticated: redirect away from login (to ?next= if it's a same-site path)
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(safeNextPath(request.nextUrl.searchParams.get("next")) ?? "/dashboard", request.url));
   }
 
   return supabaseResponse;

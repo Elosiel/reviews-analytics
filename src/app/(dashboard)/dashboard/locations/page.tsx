@@ -1,14 +1,22 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, CATEGORY_LABELS, fmtScore } from "@/lib/design";
 import { MOCK_LOCATIONS, MOCK_MATRIX } from "@/lib/mock-data";
 import { getDashboardData } from "@/lib/data/dashboard";
 import { createClient } from "@/lib/supabase/server";
 import CrossLocationHeatmap from "@/components/dashboard/CrossLocationHeatmap";
+import { getMembership } from "@/lib/team/membership";
 
 export default async function LocationsPage() {
   const supabase = await createClient();
-  const data = await getDashboardData(supabase);
+  const [data, me, { data: googleToken }] = await Promise.all([
+    getDashboardData(supabase),
+    getMembership(supabase),
+    supabase.from("google_tokens").select("user_id").limit(1).maybeSingle(),
+  ]);
+  // Owners add stores; with Google already connected, skip straight to the picker.
+  const canAdd = data.hasRealData && me?.role === "owner";
+  const addHref = googleToken ? "/onboarding?add=1" : "/onboarding";
   const locations = data.hasRealData ? data.locations : MOCK_LOCATIONS;
   const matrix = data.hasRealData ? data.matrix : MOCK_MATRIX;
 
@@ -26,9 +34,20 @@ export default async function LocationsPage() {
   return (
     <div className="px-6 py-10 max-w-5xl mx-auto space-y-7">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.16em] text-ink-faint font-medium">
-          Cross-location comparison
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-ink-faint font-medium">
+            Cross-location comparison
+          </p>
+          {canAdd && (
+            <a
+              href={addHref}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-paper text-ink text-sm font-medium px-3.5 py-2 hover:border-ink-faint"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add locations
+            </a>
+          )}
+        </div>
         <h1 className="font-heading text-[28px] font-semibold text-ink mt-1.5">
           Which location is the weak link — and on what?
         </h1>

@@ -171,5 +171,10 @@ export async function POST(request: Request) {
     );
   }
 
+  // The batch spans every tenant, so a signed-in user's manual trigger gets
+  // counts only — never other tenants' review ids or error text.
+  if (trigger === "manual") {
+    return NextResponse.json({ analyzed: succeeded, total: pending.length });
+  }
   return NextResponse.json({ analyzed: succeeded, total: pending.length, results });
 }

@@ -19,6 +19,7 @@
 import { NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getMembership } from "@/lib/team/membership";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { listReviews } from "@/lib/google/business-profile";
 import { PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
@@ -64,21 +65,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // For manual/pubsub: verify the user is authenticated
-  let authedUserId: string | null = null;
+  // Anything but the cron poll is a signed-in user's request, and is scoped
+  // to that user's own restaurant account (any teammate may trigger it).
+  let callerTenantId: string | null = null;
   if (trigger !== "scheduled_poll") {
-    const sessionClient = await createClient();
-    const { data: { user } } = await sessionClient.auth.getUser();
-    if (!user) {
+    const me = await getMembership(await createClient());
+    if (!me) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    authedUserId = user.id;
+    callerTenantId = me.tenantId;
   }
 
   // scheduled_poll syncs across every tenant's locations in one pass,
-  // matching pg_cron's own scope. A manual trigger is scoped to the calling
-  // user's own locations only — it must never sync (or surface errors from)
-  // another tenant's data just because they happen to have a stale row.
+  // matching pg_cron's own scope. Every other trigger is scoped to the
+  // caller's tenant — it must never sync (or surface errors or location
+  // names from) another tenant's data.
   const supabase = createServiceClient();
 
   let locationsQuery = supabase
@@ -92,8 +93,8 @@ export async function POST(request: Request) {
     // OAuth-connected locations only.
     .neq("google_account_id", PLACES_IMPORT_SENTINEL);
 
-  if (trigger === "manual" && authedUserId) {
-    locationsQuery = locationsQuery.eq("user_id", authedUserId);
+  if (callerTenantId) {
+    locationsQuery = locationsQuery.eq("tenant_id", callerTenantId);
   }
 
   if (body.location_id) {
