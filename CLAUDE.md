@@ -193,6 +193,25 @@ Copy `.env.local.example` → `.env.local`:
 
 ---
 
+## Trial Policy (locked)
+
+- **Every account:** 30-day trial from the exact signup timestamp
+  (`tenant_trials.trial_started_at` → `trial_ends_at = start + 30 days`, set by
+  the `handle_new_user` trigger).
+- **Exception — Terra Gaucha Tampa only:** 6 calendar months from that account's
+  original signup, for that one location only. It's a row in `trial_extensions`
+  keyed by account (`tenant_id 91c2934b-…`) + Google Business Profile location id
+  (`locations/11387573164314683712`). Other Terra Gaucha locations (and Tampa in
+  any other account) get the normal 30 days. Tampa is **not** exempt — it expires.
+- Trial dates are persisted server-side and never reset: adding locations,
+  inviting teammates, reconnecting Google or renaming does not touch them.
+  Users can read, not write, their trial rows.
+- **Never** grant or detect a trial by display name. New exceptions = a new
+  `trial_extensions` row with an explicit `trial_ends_at`.
+- Entitlement check: `src/lib/billing/trial.ts` (`locationTrial`, active strictly
+  before `trial_ends_at`) via `getTrialStatus()`. The paywall isn't built yet;
+  it should call these.
+
 ## Pricing (transparent in dashboard)
 
 - Standard: $89/location/month (4 locations = $356/mo — show this math in UI)

@@ -570,8 +570,12 @@ create policy "tenant isolation" on public.report_quote_snapshots  for all using
 -- ─────────────────────────────────────────────────────────────────
 
 -- Auto-create profile on signup
+-- Also starts the account's 30-day trial at the signup timestamp
+-- (tenant_trials is defined in the TRIALS block at the end of this file).
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_tenant uuid;
 begin
   insert into public.profiles (id, email, full_name, avatar_url)
   values (
@@ -579,7 +583,12 @@ begin
     new.email,
     new.raw_user_meta_data->>'full_name',
     new.raw_user_meta_data->>'avatar_url'
-  );
+  )
+  returning tenant_id into v_tenant;
+
+  insert into public.tenant_trials (tenant_id, trial_started_at, trial_ends_at)
+  values (v_tenant, new.created_at, new.created_at + interval '30 days')
+  on conflict (tenant_id) do nothing;
   return new;
 end;
 $$;
@@ -759,3 +768,37 @@ end;
 $$;
 revoke all on function public.accept_team_invite(text) from public, anon;
 grant execute on function public.accept_team_invite(text) to authenticated;
+
+-- ─────────────────────────────────────────────────────────────────
+-- TRIALS (migration 20261007) — dates only; no paywall yet.
+-- Account trial = signup + 30 days. A single GBP location in a single
+-- account can get an explicit later end (trial_extensions). Set once at
+-- signup / by migration; never reset by adding locations, inviting
+-- teammates, reconnecting Google or renaming. Read-only to users.
+-- Entitlement logic: src/lib/billing/trial.ts (+ trial-status.ts).
+-- ─────────────────────────────────────────────────────────────────
+create table if not exists public.tenant_trials (
+  tenant_id         uuid primary key,
+  trial_started_at  timestamptz not null,
+  trial_ends_at     timestamptz not null,
+  created_at        timestamptz not null default now(),
+  check (trial_ends_at > trial_started_at)
+);
+alter table public.tenant_trials enable row level security;
+create policy "team reads own trial" on public.tenant_trials for select
+  using (tenant_id = public.auth_tenant_id());
+revoke insert, update, delete, truncate on public.tenant_trials from anon, authenticated;
+
+create table if not exists public.trial_extensions (
+  id                  uuid primary key default uuid_generate_v4(),
+  tenant_id           uuid not null,
+  google_location_id  text not null,
+  trial_ends_at       timestamptz not null,
+  reason              text not null,
+  created_at          timestamptz not null default now(),
+  unique (tenant_id, google_location_id)
+);
+alter table public.trial_extensions enable row level security;
+create policy "team reads own trial extensions" on public.trial_extensions for select
+  using (tenant_id = public.auth_tenant_id());
+revoke insert, update, delete, truncate on public.trial_extensions from anon, authenticated;
