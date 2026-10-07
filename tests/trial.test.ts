@@ -5,6 +5,7 @@ import {
   isTrialActive,
   locationTrial,
   standardTrialEndsAt,
+  trialDaysLeft,
   type AccountTrial,
   type TrialExtension,
 } from "../src/lib/billing/trial.ts";
@@ -108,4 +109,17 @@ test("an extension never shortens the account trial", () => {
 test("isTrialActive is strict at the boundary", () => {
   assert.equal(isTrialActive("2026-11-05T12:00:00.000Z", Date.parse("2026-11-05T11:59:59.999Z")), true);
   assert.equal(isTrialActive("2026-11-05T12:00:00.000Z", Date.parse("2026-11-05T12:00:00.000Z")), false);
+});
+
+test("days left counts down per location and hits 0 exactly at expiry", () => {
+  const now = Date.parse("2026-10-07T12:00:00.000Z");
+  // Tampa: Apr 5, 2027 21:51 UTC → 181 days (rounded up) from Oct 7 noon.
+  assert.equal(trialDaysLeft(locationTrial(tampa, tampaAccount, extensions).trialEndsAt, now), 181);
+  // A second location in the same account follows the account's 30 days.
+  const other = locationTrial({ tenant_id: TAMPA_ACCOUNT, google_location_id: "locations/other" }, tampaAccount, extensions);
+  assert.equal(trialDaysLeft(other.trialEndsAt, now), 29);
+  const end = "2026-11-05T12:00:00.000Z";
+  assert.equal(trialDaysLeft(end, Date.parse(end) - 1), 1);
+  assert.equal(trialDaysLeft(end, Date.parse(end)), 0);
+  assert.equal(trialDaysLeft(end, Date.parse(end) + 10 * DAY), 0);
 });

@@ -6,19 +6,29 @@ import { getDashboardData } from "@/lib/data/dashboard";
 import { createClient } from "@/lib/supabase/server";
 import CrossLocationHeatmap from "@/components/dashboard/CrossLocationHeatmap";
 import { getMembership } from "@/lib/team/membership";
+import { getTrialStatus } from "@/lib/billing/trial-status";
+import TrialBadge from "@/components/dashboard/TrialBadge";
 
 export default async function LocationsPage() {
   const supabase = await createClient();
-  const [data, me, { data: googleToken }] = await Promise.all([
+  const [data, me, { data: googleToken }, { data: teamPlans }] = await Promise.all([
     getDashboardData(supabase),
     getMembership(supabase),
     supabase.from("google_tokens").select("user_id").limit(1).maybeSingle(),
+    // RLS-scoped to this account's team; any paid plan means no trial countdown.
+    supabase.from("profiles").select("plan"),
   ]);
   // Owners add stores; with Google already connected, skip straight to the picker.
   const canAdd = data.hasRealData && me?.role === "owner";
   const addHref = googleToken ? "/onboarding?add=1" : "/onboarding";
   const locations = data.hasRealData ? data.locations : MOCK_LOCATIONS;
   const matrix = data.hasRealData ? data.matrix : MOCK_MATRIX;
+
+  // Each location's own free-trial countdown, from the persisted trial dates
+  // (Tampa has its own extension; everything else follows the account's 30 days).
+  const onTrial = (teamPlans ?? []).length > 0 && (teamPlans ?? []).every((p) => p.plan === "trial");
+  const trial =
+    data.hasRealData && onTrial && me ? await getTrialStatus(supabase, me.tenantId, data.locations) : null;
 
   // Weakest category per location (drives the location cards). Only
   // categories guests actually mentioned count — zero-mention cells
@@ -79,6 +89,9 @@ export default async function LocationsPage() {
                   <AlertTriangle className="w-4 h-4 text-neg shrink-0" />
                 )}
               </div>
+              {trial?.locations[loc.id] && (
+                <TrialBadge endsAt={trial.locations[loc.id].trialEndsAt} />
+              )}
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl font-bold text-ink tabular-nums">
                   {loc.rating?.toFixed(1) ?? "—"}

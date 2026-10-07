@@ -81,3 +81,11 @@ export function locationTrial(
   const trialEndsAt = useExt ? ext.trialEndsAt : account.trialEndsAt;
   return { trialEndsAt, active: isTrialActive(trialEndsAt, now), source: useExt ? "extension" : "account" };
 }
+
+/**
+ * Whole days left, rounded up — so "1 day left" means under 24 hours remain
+ * and 0 means the trial has ended. Matches isTrialActive at the boundary.
+ */
+export function trialDaysLeft(trialEndsAt: string, now: number = Date.now()): number {
+  return Math.max(0, Math.ceil((Date.parse(trialEndsAt) - now) / DAY_MS));
+}
