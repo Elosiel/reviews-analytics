@@ -33,7 +33,7 @@ export default function InviteAccept({
 
   const next = `/invite/${token}`;
   const loginHref = (mode: "signin" | "signup") =>
-    `/login?${new URLSearchParams({ next, mode, ...(invitedEmail ? { email: invitedEmail } : {}) })}`;
+    `/${mode === "signup" ? "signup" : "login"}?${new URLSearchParams({ next, ...(invitedEmail ? { email: invitedEmail } : {}) })}`;
 
   async function join() {
     setJoining(true);
