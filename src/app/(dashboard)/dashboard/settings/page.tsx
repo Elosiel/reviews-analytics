@@ -3,6 +3,12 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle, RefreshCw, Plus, Sparkles } from "lucide-react";
 import DeleteLocationButton from "@/components/dashboard/DeleteLocationButton";
 import TeamSection, { type PendingInvite, type Teammate } from "@/components/team/TeamSection";
+import { getTrialStatus } from "@/lib/billing/trial-status";
+import { isTrialActive } from "@/lib/billing/trial";
+
+function fmtTrialDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -19,7 +25,7 @@ export default async function SettingsPage() {
   const [{ data: locations }, { data: tokenRow }, { data: teammates }, { data: invites }] = await Promise.all([
     supabase
       .from("locations")
-      .select("id, name, address, rating, review_count, connection_broken, last_synced_at")
+      .select("id, tenant_id, google_location_id, name, address, rating, review_count, connection_broken, last_synced_at")
       .order("name"),
     // The account's Google connection, whoever on the team made it.
     supabase
@@ -37,6 +43,18 @@ export default async function SettingsPage() {
   ]);
 
   const plan = profile?.plan ?? "trial";
+  const trial =
+    plan === "trial" && profile?.tenant_id
+      ? await getTrialStatus(supabase, profile.tenant_id, locations ?? [])
+      : null;
+  // Locations grouped by when their free period ends — one group for almost
+  // every account; more only when a location has its own extension.
+  const trialGroups = new Map<string, string[]>();
+  for (const loc of locations ?? []) {
+    const end = trial?.locations[loc.id]?.trialEndsAt;
+    if (end) trialGroups.set(end, [...(trialGroups.get(end) ?? []), loc.name]);
+  }
+  if (trial && trialGroups.size === 0) trialGroups.set(trial.account.trialEndsAt, []);
   const locationCount = locations?.length ?? 0;
   const monthlyPrice = locationCount * 89;
 
@@ -93,8 +111,25 @@ export default async function SettingsPage() {
         </div>
         {plan === "trial" && isOwner && (
           <div className="px-6 py-4 bg-cream/60">
-            <p className="text-sm text-ink-soft">
-              You&apos;re on a free trial.{" "}
+            {trialGroups.size === 1 ? (
+              <p className="text-sm text-ink">
+                {(() => {
+                  const [end] = [...trialGroups.keys()];
+                  return isTrialActive(end)
+                    ? `Your free trial runs until ${fmtTrialDate(end)}.`
+                    : `Your free trial ended on ${fmtTrialDate(end)}.`;
+                })()}
+              </p>
+            ) : trialGroups.size > 1 ? (
+              <ul className="space-y-1 text-sm text-ink">
+                {[...trialGroups.entries()].map(([end, names]) => (
+                  <li key={end}>
+                    {`${isTrialActive(end) ? "Free until" : "Free trial ended"} ${fmtTrialDate(end)}: ${names.join(", ")}`}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="text-sm text-ink-soft mt-1">
               <a
                 href="https://reviewsanalytics.ai/pricing"
                 className="text-forest font-medium underline underline-offset-2"
