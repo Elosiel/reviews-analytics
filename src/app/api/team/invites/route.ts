@@ -13,6 +13,7 @@ import { getMembership, OWNER_ONLY_MESSAGE } from "@/lib/team/membership";
 import { hashInviteToken, newInviteToken } from "@/lib/team/invite-token";
 import { isValidEmail, normalizeEmail, restaurantDisplayName } from "@/lib/team/invite-shared";
 import { sendInviteEmail } from "@/lib/team/invite-email";
+import { recordEvent } from "@/lib/telemetry/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -69,5 +70,6 @@ export async function POST(request: Request) {
     restaurantName: restaurantDisplayName((locations ?? []).map((l) => l.name)),
   });
 
+  await recordEvent({ type: "team_invite_sent", tenantId: me.tenantId, userId: me.user.id });
   return NextResponse.json({ invite, invite_url: inviteUrl, emailed });
 }

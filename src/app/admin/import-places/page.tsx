@@ -9,22 +9,12 @@
  * /api/reviews/sync (GBP) is live for real tenants.
  */
 
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import PlacesImportTool from "@/components/admin/PlacesImportTool";
+import { requireAdminPage } from "@/lib/admin/auth";
 
 export default async function ImportPlacesPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "operator") redirect("/dashboard");
+  // Internal tool: same gate as the admin console (admin role + two-factor).
+  await requireAdminPage("manage_accounts");
 
   return (
     <div className="min-h-screen bg-zinc-50">

@@ -25,6 +25,7 @@ import { listReviews } from "@/lib/google/business-profile";
 import { PLACES_IMPORT_SENTINEL } from "@/lib/google/places-reviews";
 import { describeGoogleError, type GoogleErrorKind } from "@/lib/google/errors";
 import { importCutoffMs, selectWindowReviews } from "@/lib/reviews/import-window";
+import { logAppError } from "@/lib/telemetry/server";
 
 // The onboarding first import pages through the import window synchronously.
 export const maxDuration = 60;
@@ -212,6 +213,7 @@ export async function POST(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Sync failed for location ${loc.id}:`, msg);
+      await logAppError({ category: "sync", source: "review sync", error: err, tenantId: loc.tenant_id, details: { location_id: loc.id } });
       const info = describeGoogleError(err);
       results.push({
         location_id: loc.id,

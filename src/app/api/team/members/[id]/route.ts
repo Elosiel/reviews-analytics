@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getMembership, OWNER_ONLY_MESSAGE } from "@/lib/team/membership";
+import { recordEvent } from "@/lib/telemetry/server";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,5 +33,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .eq("id", id)
     .eq("tenant_id", me.tenantId);
   if (error) return NextResponse.json({ error: "We couldn't remove that teammate." }, { status: 500 });
+  await recordEvent({ type: "team_member_removed", tenantId: me.tenantId, userId: me.user.id });
   return NextResponse.json({ ok: true });
 }

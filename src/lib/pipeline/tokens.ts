@@ -12,6 +12,7 @@
 import { refreshAccessToken } from "@/lib/google/oauth";
 import { encryptToken, decryptToken } from "@/lib/google/token-crypto";
 import { GoogleReauthError } from "@/lib/google/errors";
+import { logAppError, recordEvent } from "@/lib/telemetry/server";
 
 // ── Get a valid access token for a user (refreshes if needed) ────
 
@@ -73,6 +74,12 @@ export async function getValidAccessToken(
         connection_broken_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
+
+    const { data: owner } = await supabase.from("profiles").select("tenant_id").eq("id", userId).maybeSingle();
+    await Promise.all([
+      recordEvent({ type: "google_connection_broken", tenantId: owner?.tenant_id ?? null, userId }),
+      logAppError({ category: "google_auth", source: "google token refresh", error: err, tenantId: owner?.tenant_id ?? null, userId }),
+    ]);
 
     throw new GoogleReauthError(
       `Google connection broken for user ${userId}. ` +

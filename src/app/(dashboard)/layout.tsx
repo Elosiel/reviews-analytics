@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 import DashboardShell from "@/components/layouts/DashboardShell";
+import ImpersonationBanner from "@/components/admin/ImpersonationBanner";
+import { IMP_META_COOKIE, parseImpersonationMeta } from "@/lib/admin/impersonation-shared";
 
 export default async function DashboardLayout({
   children,
@@ -35,7 +38,12 @@ export default async function DashboardLayout({
     .select("*", { count: "exact", head: true })
     .eq("resolved", false);
 
+  // An admin "view as" session: say so on every page, with an Exit button.
+  const impersonation = parseImpersonationMeta((await cookies()).get(IMP_META_COOKIE)?.value);
+
   return (
+    <>
+    {impersonation && <ImpersonationBanner meta={impersonation} />}
     <DashboardShell
       user={{
         email: user.email,
@@ -55,5 +63,6 @@ export default async function DashboardLayout({
       )}
       {children}
     </DashboardShell>
+    </>
   );
 }

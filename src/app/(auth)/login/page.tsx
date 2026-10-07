@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +20,7 @@ import {
   Spinner,
 } from "@/components/auth/auth-ui";
 import { safeNextPath } from "@/lib/team/invite-shared";
+import { track } from "@/lib/telemetry/track";
 
 // /login is for existing customers only. New accounts are created on
 // /signup; the middleware forwards old /login?mode=signup links there.
@@ -39,6 +40,9 @@ const STATS = [
 
 function LoginInner() {
   const searchParams = useSearchParams();
+  useEffect(() => {
+    if (window.location.hash.includes("type=recovery")) window.location.replace(`/reset-password${window.location.hash}`);
+  }, []);
   // Where to land after auth (e.g. back on a team invite) — same-site paths only.
   const next = safeNextPath(searchParams.get("next"));
   const prefillEmail = searchParams.get("email") ?? "";
@@ -83,6 +87,7 @@ function LoginInner() {
       submitting.current = false;
       return;
     }
+    track("login");
     // Full navigation so the middleware picks up the new session cookies
     window.location.assign(next ?? "/dashboard");
   }
@@ -185,6 +190,11 @@ function LoginInner() {
                   />
                 )}
               </Field>
+              <div className="-mt-1 text-right">
+                <a href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`} className="text-[13px] text-zinc-600 underline-offset-4 hover:text-zinc-950 hover:underline">
+                  Forgot password?
+                </a>
+              </div>
               <button
                 type="submit"
                 id="login_submit"

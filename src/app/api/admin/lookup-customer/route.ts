@@ -11,24 +11,14 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminApi } from "@/lib/admin/auth";
 
 export async function GET(request: Request) {
   // Session-bound client — RLS only lets a user read their own profile row,
   // which is exactly enough to check "is this caller an operator?".
-  const sessionClient = await createClient();
-  const { data: { user } } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: caller } = await sessionClient
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (caller?.role !== "operator") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Internal tool: same gate as the admin console (admin role + two-factor).
+  const admin = await requireAdminApi("manage_accounts");
+  if (admin instanceof NextResponse) return admin;
 
   const email = new URL(request.url).searchParams.get("email")?.trim();
   if (!email) {

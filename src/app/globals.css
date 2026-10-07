@@ -145,3 +145,9 @@
     @apply font-sans;
   }
 }
+/* Admin console sign-in fields (dark surface). */
+@layer components {
+  .admin-input {
+    @apply h-11 w-full rounded-lg border border-white/15 bg-white/[0.04] px-3.5 text-[15px] text-white placeholder:text-zinc-500 outline-none motion-safe:transition-[border-color,box-shadow] focus-visible:border-signal/70 focus-visible:ring-4 focus-visible:ring-signal/15;
+  }
+}
