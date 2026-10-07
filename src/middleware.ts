@@ -45,14 +45,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Authenticated: redirect away from login (to ?next= if it's a same-site path)
-  if (user && pathname === "/login") {
+  // Authenticated: redirect away from login/signup (to ?next= if it's a same-site path)
+  if (user && (pathname === "/login" || pathname === "/signup")) {
     return NextResponse.redirect(new URL(safeNextPath(request.nextUrl.searchParams.get("next")) ?? "/dashboard", request.url));
+  }
+
+  // Sign-up used to be a mode of /login — keep old links (and their ?next=/
+  // ?email=) working by forwarding them to /signup.
+  if (pathname === "/login" && request.nextUrl.searchParams.get("mode") === "signup") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/signup";
+    url.searchParams.delete("mode");
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/onboarding", "/login"],
+  matcher: ["/dashboard/:path*", "/onboarding/:path*", "/onboarding", "/login", "/signup"],
 };
