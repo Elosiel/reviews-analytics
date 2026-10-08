@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { hashInviteToken } from "@/lib/team/invite-token";
 import { acceptInviteMessage } from "@/lib/team/invite-shared";
+import { recordEvent } from "@/lib/telemetry/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -25,5 +26,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ result: "error", error: "We couldn't accept the invite. Please try again." }, { status: 500 });
   }
   const ok = result === "joined" || result === "already_member";
+  if (result === "joined") {
+    const { data: joined } = await supabase.from("profiles").select("tenant_id").eq("id", user.id).maybeSingle();
+    await recordEvent({ type: "team_invite_accepted", tenantId: joined?.tenant_id ?? null, userId: user.id });
+  }
   return NextResponse.json({ result, error: ok ? null : acceptInviteMessage(String(result)) }, { status: ok ? 200 : 400 });
 }

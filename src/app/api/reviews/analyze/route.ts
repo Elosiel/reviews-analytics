@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { analyzeReview } from "@/lib/pipeline/claude";
 import { importCutoffMs } from "@/lib/reviews/import-window";
+import { logAppError } from "@/lib/telemetry/server";
 
 export const maxDuration = 60;
 
@@ -127,6 +128,7 @@ async function analyzePending(isCatchUp: boolean) {
       return true;
     } catch (err) {
       console.error(`Analysis failed for review ${review.id}:`, err instanceof Error ? err.message : err);
+      await logAppError({ category: "analysis", source: "review analysis", error: err, tenantId: review.tenant_id, details: { location_id: review.location_id } });
       // Skipped for the rest of this run so one bad review can't loop it;
       // a later run retries it. (Two overlapping runs can't double-count:
       // review_analyses.review_id is unique, so the second insert fails.)

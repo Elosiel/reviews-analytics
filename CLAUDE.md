@@ -147,7 +147,9 @@ Google API ToS: `review_text` and `reviewer_name` may only be cached 30 days.
 - Every customer-data table carries `tenant_id`
 - RLS enforced via Postgres session variable `app.current_tenant_id`
 - Set with `SELECT set_tenant('uuid')` — NEVER from request params
-- Two roles: `operator` (admin, service-role) · `tenant` (RLS-scoped)
+- Customer sessions are RLS-scoped. Internal access is the **Super Admin console**
+  (`/super-admin`), not a profile role — see "Super Admin" below. (`profiles.role`
+  is legacy and not used for authorization.)
 - **Teams:** several logins can share one tenant. `profiles.team_role` is `owner`
   (billing, add/remove locations, invite/remove teammates) or `member` (everything
   else). Teammates are free — pricing is per location. Owners invite by email
@@ -211,6 +213,32 @@ Copy `.env.local.example` → `.env.local`:
 - Entitlement check: `src/lib/billing/trial.ts` (`locationTrial`, active strictly
   before `trial_ends_at`) via `getTrialStatus()`. The paywall isn't built yet;
   it should call these.
+
+## Super Admin (internal control center)
+
+- **Who:** rows in `admin_users` (`super_admin` today; `support_admin`, `billing_admin`,
+  `analytics_admin` reserved with narrower capabilities in `src/lib/admin/access.ts`).
+  Granted only by the project owner in the Supabase SQL editor:
+  `select public.grant_admin_role('person@…');` — never from the app.
+- **Gate:** verified session + active `admin_users` row + two-factor (aal2). Enforced
+  server-side in the console layout, every console page (`requireAdminPage`) and every
+  `/api/super-admin/*` route (`requireAdminApi`). Admin data functions
+  (`src/lib/admin/data.ts`) require the verified admin context and only then use the
+  service role. Sign-in: `/super-admin/login` (TOTP enrollment on first sign-in).
+- **Impersonation ("View as")**: reason required, 30 minutes max, read-only (middleware
+  refuses non-GET requests; restrictive RLS refuses writes from that auth session via
+  `is_impersonating()`), purple banner with Exit, audited start/end/expiry, pg_cron
+  `impersonation-expiry` revokes the session server-side. Never admins, disabled or
+  unconfirmed users. Passwords are never read or shown — resets send Supabase's email.
+- **Audit:** `admin_audit_log` is append-only (triggers + revoked UPDATE/DELETE/TRUNCATE,
+  even for the service role). Every privileged action writes one row (`audit()`).
+- **Telemetry:** `product_events` (allowlisted event types + sanitized metadata,
+  `src/lib/telemetry/`), `app_errors` (scrubbed messages, no stack traces), `feedback`
+  (+ `feedback_notes`), `account_notes`, `tenant_admin_flags` (internal/test accounts).
+  None are readable or writable by customer roles; customers write feedback/events only
+  through `/api/feedback` and `/api/events`, which stamp user + tenant from the session.
+  Never log passwords, tokens, secrets or review text.
+- `profiles` writes from customer roles are blocked by the `profiles_write_guard` trigger.
 
 ## Pricing (transparent in dashboard)
 

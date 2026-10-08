@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import LogoMark from "@/components/shared/LogoMark";
+import FeedbackWidget from "@/components/feedback/FeedbackWidget";
+import { track } from "@/lib/telemetry/track";
 
 interface NavItem {
   href: string;
@@ -55,7 +57,13 @@ export default function DashboardShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // One "page_viewed" per dashboard page (path only — never query strings).
+  useEffect(() => {
+    track("page_viewed", { path: pathname });
+  }, [pathname]);
+
   async function handleSignOut() {
+    track("logout");
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -145,6 +153,10 @@ export default function DashboardShell({
           </p>
         </Link>
       )}
+
+      <div className="px-3 pb-2">
+        <FeedbackWidget />
+      </div>
 
       {/* User */}
       <div className="px-3 pb-4 border-t border-line-soft pt-3">

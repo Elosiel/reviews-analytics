@@ -14,23 +14,13 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminApi } from "@/lib/admin/auth";
 import { importPlacesForTenant, triggerAnalysis, type PlacesImportLocationInput } from "@/lib/pipeline/places-import";
 
 export async function POST(request: Request) {
-  const sessionClient = await createClient();
-  const { data: { user } } = await sessionClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { data: caller } = await sessionClient
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (caller?.role !== "operator") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Internal tool: same gate as the admin console (admin role + two-factor).
+  const admin = await requireAdminApi("manage_accounts");
+  if (admin instanceof NextResponse) return admin;
 
   const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -13,6 +13,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { draftSop, type SopTriggerLocation } from "@/lib/pipeline/claude";
 import type { RestaurantProfile, SentimentCategory } from "@/types";
+import { logAppError, recordEvent } from "@/lib/telemetry/server";
 
 // A full SOP draft from Claude can take well over the default timeout.
 export const maxDuration = 60;
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
     draft = await draftSop(category, triggerLocations, profile);
   } catch (err) {
     console.error("SOP draft failed:", err);
+    await logAppError({ category: "api", source: "POST /api/sops/generate", error: err, tenantId, userId: user.id });
     return NextResponse.json(
       { error: "We couldn't draft this SOP just now. Please try again in a moment." },
       { status: 502 }
@@ -175,5 +177,6 @@ export async function POST(request: Request) {
     );
   }
 
+  await recordEvent({ type: "sop_drafted", tenantId, userId: user.id, metadata: { category } });
   return NextResponse.json({ data: sop, error: null });
 }

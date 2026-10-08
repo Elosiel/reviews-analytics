@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateMeetingAgenda, type MeetingAgendaSourceIssue } from "@/lib/pipeline/claude";
 import { DRIFT_THRESHOLD } from "@/types";
 import type { AlertSeverity, RestaurantProfile, SentimentCategory } from "@/types";
+import { logAppError, recordEvent } from "@/lib/telemetry/server";
 
 // A multi-issue agenda from Claude can take well over the default timeout.
 export const maxDuration = 60;
@@ -202,6 +203,7 @@ export async function POST(request: Request) {
     agenda = await generateMeetingAgenda(topIssues, profile);
   } catch (err) {
     console.error("Meeting agenda generation failed:", err);
+    await logAppError({ category: "api", source: "POST /api/meetings/generate", error: err, tenantId, userId: user.id });
     return NextResponse.json(
       { error: "We couldn't write this agenda just now. Please try again in a moment." },
       { status: 502 }
@@ -245,5 +247,6 @@ export async function POST(request: Request) {
     );
   }
 
+  await recordEvent({ type: "meeting_generated", tenantId, userId: user.id });
   return NextResponse.json({ data: meeting, error: null });
 }

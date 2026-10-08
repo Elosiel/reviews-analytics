@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
 import { encryptToken } from "@/lib/google/token-crypto";
 import { hasBusinessProfileScope } from "@/lib/google/errors";
+import { logAppError, recordEvent } from "@/lib/telemetry/server";
 
 // Handles the OAuth callback from Google after the user grants access.
 // Exchanges the code for tokens, encrypts them, and stores in google_tokens.
@@ -97,10 +98,13 @@ export async function GET(request: Request) {
       data: { google_oauth_state: null },
     });
 
+    await recordEvent({ type: "google_connected", tenantId: profile.tenant_id, userId: user.id });
+
     // Redirect back to onboarding to pick locations
     return NextResponse.redirect(`${appUrl}/onboarding?gbp=connected`);
   } catch (err) {
     console.error("Google callback error:", err);
+    await logAppError({ category: "google_auth", source: "GET /api/google/callback", error: err });
     return NextResponse.redirect(
       `${appUrl}/onboarding?error=token_exchange_failed`
     );

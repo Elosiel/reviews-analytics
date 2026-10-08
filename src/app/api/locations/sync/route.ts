@@ -5,6 +5,7 @@ import { listAccounts, listLocations } from "@/lib/google/business-profile";
 import { getValidAccessToken } from "@/lib/pipeline/tokens";
 import { describeGoogleError } from "@/lib/google/errors";
 import { canAddLocations, getMembership } from "@/lib/team/membership";
+import { recordEvent } from "@/lib/telemetry/server";
 
 // GET — fetch available locations from Google Business Profile
 // Called from onboarding after GBP OAuth completes.
@@ -123,5 +124,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  await recordEvent({ type: "location_added", tenantId: profile.tenant_id, userId: user.id, metadata: { count: rows.length } });
   return NextResponse.json({ saved: rows.length });
 }

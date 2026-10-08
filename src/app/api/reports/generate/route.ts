@@ -38,6 +38,7 @@ import type {
   RestaurantProfile,
   SentimentCategory,
 } from "@/types";
+import { logAppError, recordEvent } from "@/lib/telemetry/server";
 
 const ALL_CATEGORIES: SentimentCategory[] = [
   "food", "service", "atmosphere", "value", "wait_time", "cleanliness",
@@ -437,6 +438,7 @@ export async function POST() {
       aiGenerated = true;
     } catch (err) {
       console.error("Weekly report Claude generation failed, using deterministic fallback:", err);
+      await logAppError({ category: "api", source: "weekly report AI narrative (fell back)", error: err, tenantId, userId: user.id });
     }
   }
   if (!narrative) {
@@ -574,5 +576,6 @@ export async function POST() {
     await supabase.from("report_quote_snapshots").insert(quoteRows);
   }
 
+  await recordEvent({ type: "report_generated", tenantId, userId: user.id });
   return NextResponse.json({ data: report, error: null });
 }
