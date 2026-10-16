@@ -416,6 +416,20 @@ function PlaceResult({
           </div>
         </div>
 
+        {/* ── Free one-page report from the public reviews (live places only) ── */}
+        {place.is_live && (
+          <a
+            href={`/preview/report/${encodeURIComponent(place.id)}`}
+            className="flex items-center justify-between gap-3 bg-forest text-paper rounded-2xl px-5 py-4 hover:bg-forest-soft transition-colors"
+          >
+            <span>
+              <span className="block font-heading text-[15px] font-semibold">Get the free one-page report</span>
+              <span className="block text-xs opacity-90">Themes, top fixes and risks from {place.name}&apos;s public reviews</span>
+            </span>
+            <ArrowRight className="w-4 h-4 shrink-0" />
+          </a>
+        )}
+
         {/* ── The locked full analysis ── */}
         <div className="bg-paper rounded-2xl border border-forest/25 overflow-hidden relative">
           <div className="px-5 py-4 border-b border-line-soft bg-[#faf8f2] flex items-center justify-between">
